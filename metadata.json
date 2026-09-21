@@ -1,0 +1,6 @@
+{
+  "name": "Fishing Days",
+  "description": "A serene 3D indie fishing web app with realistic physics, dynamic weather and day/night cycles, relaxing ambient soundscapes, unlockable gear, global leaderboard, and multiplayer social sessions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
