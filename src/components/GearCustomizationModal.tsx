@@ -890,11 +890,11 @@ export const GearCustomizationModal: React.FC<GearCustomizationModalProps> = ({
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="text-xl">{lure.icon}</span>
+                            <span className="text-xl">{lure.icon || '🪝'}</span>
                             <h4 className="text-sm font-bold text-white">{lure.name}</h4>
                           </div>
                           <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-purple-400">
-                            Tier {lure.tier}
+                            Tier {lure.tier || 1}
                           </span>
                         </div>
 
@@ -902,16 +902,16 @@ export const GearCustomizationModal: React.FC<GearCustomizationModalProps> = ({
 
                         <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-800/80 text-[11px] font-mono">
                           <div className="text-slate-300">
-                            Rarity Boost: <span className="text-purple-400">+{lure.rarityBoostPercent}%</span>
+                            Rarity Boost: <span className="text-purple-400">+{lure.rarityBoostPercent || 0}%</span>
                           </div>
                           <div className="text-slate-300">
-                            Bite Rate: <span className="text-yellow-400">+{lure.biteRateBonus}%</span>
+                            Bite Rate: <span className="text-yellow-400">+{lure.biteRateBonus || 0}%</span>
                           </div>
                           <div className="text-slate-300">
-                            Grace Time: <span className="text-emerald-400">+{lure.reactionGraceBonus}s</span>
+                            Grace Time: <span className="text-emerald-400">+{lure.reactionGraceBonus || 0}s</span>
                           </div>
                           <div className="text-slate-300">
-                            Attract Radius: <span className="text-cyan-400">+{lure.attractionRadiusBonus}%</span>
+                            Attract Radius: <span className="text-cyan-400">+{lure.attractionRadiusBonus || 0}%</span>
                           </div>
                         </div>
 

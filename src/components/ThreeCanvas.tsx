@@ -4,13 +4,11 @@ import {
   FishingState,
   WeatherType,
   TimeOfDay,
-  AnglerPeer,
   RodItem,
   GearCustomization,
   CabinTheme,
   DockLighting,
   MountedTrophy,
-  ViewMode,
 } from '../types';
 import { createStylizedTerrain } from './world/Terrain';
 import { StylizedWater } from './world/Water';
@@ -30,13 +28,11 @@ interface ThreeCanvasProps {
   fishDistance: number;
   weather: WeatherType;
   timeOfDay: TimeOfDay;
-  peers: AnglerPeer[];
   equippedRod: RodItem;
   customization: GearCustomization;
   cabinTheme: CabinTheme;
   dockLighting: DockLighting;
   mountedTrophies: MountedTrophy[];
-  viewMode: ViewMode;
   isPaused?: boolean;
   onCanFishChange?: (canFish: boolean) => void;
   onPlayerPositionChange?: (pos: [number, number, number]) => void;
@@ -67,13 +63,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   fishDistance,
   weather,
   timeOfDay,
-  peers,
   equippedRod,
   customization,
   cabinTheme,
   dockLighting,
   mountedTrophies,
-  viewMode,
   isPaused = false,
   onCanFishChange,
   onPlayerPositionChange,
@@ -87,15 +81,12 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   // Entities
   const playerRef = useRef<StylizedPlayerCharacter | null>(null);
   const waterRef = useRef<StylizedWater | null>(null);
-  const propsRef = useRef<EnvironmentProps | null>(null);
-  const skyDomeRef = useRef<StylizedSkyDome | null>(null);
   const villageRef = useRef<StylizedVillageBase | null>(null);
-
-  // Bobber & line
+  const skyDomeRef = useRef<StylizedSkyDome | null>(null);
+  const propsRef = useRef<EnvironmentProps | null>(null);
   const bobberGroupRef = useRef<THREE.Group | null>(null);
   const lineMeshRef = useRef<THREE.Line | null>(null);
   const fishShadowRef = useRef<THREE.Mesh | null>(null);
-  const peerMeshesRef = useRef<Map<string, THREE.Group>>(new Map());
 
   // Lights & weather
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -105,11 +96,12 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   const rainParticlesRef = useRef<THREE.Points | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
 
-  // Movement & Camera state
+  // Player state: start cleanly on dock walkway facing lake (-Z)
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.44, 1.2));
-  const playerRotYRef = useRef<number>(Math.PI); // Facing the lake (towards -Z)
-  const cameraYawRef = useRef<number>(0); // Camera orbit yaw offset
-  const cameraPitchRef = useRef<number>(0.2); // Camera orbit pitch
+  const playerRotYRef = useRef<number>(Math.PI);
+  // Third-person camera orbit (distance: 4.8 - 5.5m, height: 2.2m)
+  const cameraYawRef = useRef<number>(0);
+  const cameraPitchRef = useRef<number>(0.22);
 
   // Desktop keyboard movement keys
   const keysRef = useRef<{ w: boolean; a: boolean; s: boolean; d: boolean; shift: boolean }>({
@@ -120,7 +112,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     shift: false,
   });
 
-  // Touch drag for camera rotation
+  // Touch drag tracking for right-side camera rotation on mobile
   const touchStartRef = useRef<{ x: number; y: number; id: number } | null>(null);
 
   // State mirror for 60fps render loop
@@ -131,13 +123,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     fishDistance,
     weather,
     timeOfDay,
-    peers,
     equippedRod,
     customization,
     cabinTheme,
     dockLighting,
     mountedTrophies,
-    viewMode,
     isPaused,
     joystickInput,
   });
@@ -150,13 +140,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       fishDistance,
       weather,
       timeOfDay,
-      peers,
       equippedRod,
       customization,
       cabinTheme,
       dockLighting,
       mountedTrophies,
-      viewMode,
       isPaused,
       joystickInput,
     };
@@ -167,13 +155,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     fishDistance,
     weather,
     timeOfDay,
-    peers,
     equippedRod,
     customization,
     cabinTheme,
     dockLighting,
     mountedTrophies,
-    viewMode,
     isPaused,
     joystickInput,
   ]);
@@ -232,13 +218,13 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     scene.fog = new THREE.Fog(0xb2d9fb, 35, 135);
 
     const camera = new THREE.PerspectiveCamera(
-      48,
+      45,
       container.clientWidth / container.clientHeight,
       0.1,
       350
     );
-    camera.position.set(0, 3.2, 7.5);
-    camera.lookAt(0, 1.2, -6);
+    camera.position.set(0, 2.6, 6.2);
+    camera.lookAt(0, 1.2, 0);
     cameraRef.current = camera;
 
     // 3. Lighting Rig
@@ -251,65 +237,65 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     scene.add(hemi);
     hemiLightRef.current = hemi;
 
-    const sun = new THREE.DirectionalLight(0xffedd5, 1.35);
-    sun.position.set(28, 42, -25);
+    const sun = new THREE.DirectionalLight(0xfff3d6, 1.4);
+    sun.position.set(30, 45, -35);
     sun.castShadow = true;
-    sun.shadow.mapSize.width = 1024;
-    sun.shadow.mapSize.height = 1024;
-    sun.shadow.camera.near = 1.0;
-    sun.shadow.camera.far = 140;
-    sun.shadow.camera.left = -35;
-    sun.shadow.camera.right = 35;
-    sun.shadow.camera.top = 35;
-    sun.shadow.camera.bottom = -35;
-    sun.shadow.bias = -0.0008;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 150;
+    sun.shadow.camera.left = -30;
+    sun.shadow.camera.right = 30;
+    sun.shadow.camera.top = 30;
+    sun.shadow.camera.bottom = -30;
+    sun.shadow.bias = -0.0004;
     scene.add(sun);
     sunLightRef.current = sun;
 
-    // 4. Sky Dome, Clouds & Mountains
-    const skyDome = new StylizedSkyDome();
-    scene.add(skyDome.mesh);
-    scene.add(skyDome.clouds);
-    skyDomeRef.current = skyDome;
-
-    const mountains = createMountainHorizon();
-    scene.add(mountains);
-
-    // Stars
-    const starsCount = 600;
-    const starsGeo = new THREE.BufferGeometry();
-    const starPositions = new Float32Array(starsCount * 3);
-    for (let i = 0; i < starsCount * 3; i += 3) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.45;
-      const r = 240;
+    // 4. Night Stars
+    const starCount = 600;
+    const starGeo = new THREE.BufferGeometry();
+    const starPositions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount * 3; i += 3) {
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 160;
       starPositions[i] = r * Math.sin(phi) * Math.cos(theta);
-      starPositions[i + 1] = r * Math.cos(phi);
+      starPositions[i + 1] = Math.abs(r * Math.cos(phi)) + 15;
       starPositions[i + 2] = r * Math.sin(phi) * Math.sin(theta);
     }
-    starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starMat = new THREE.PointsMaterial({
       color: 0xffffff,
-      size: 1.2,
+      size: 1.5,
       transparent: true,
       opacity: 0,
     });
-    const stars = new THREE.Points(starsGeo, starMat);
+    const stars = new THREE.Points(starGeo, starMat);
     scene.add(stars);
     starsRef.current = stars;
 
-    // 5. Stylized Terrain
+    // 5. Stylized Sky Dome
+    const skyDome = new StylizedSkyDome();
+    scene.add(skyDome.mesh);
+    skyDomeRef.current = skyDome;
+
+    // 6. Mountain Horizon
+    const mountains = createMountainHorizon();
+    scene.add(mountains);
+
+    // 7. Terrain & Forest & Water
     const terrain = createStylizedTerrain();
     scene.add(terrain);
 
-    // 6. Water Surface
+    const forest = createTreeForest();
+    scene.add(forest);
+
     const water = new StylizedWater();
     scene.add(water.mesh);
     waterRef.current = water;
-
-    // 7. Trees & Props
-    const forest = createTreeForest();
-    scene.add(forest);
 
     const envProps = new EnvironmentProps();
     scene.add(envProps.group);
@@ -319,21 +305,21 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     const dock = createStylizedDock();
     scene.add(dock);
 
-    // 9. Village & Base
+    // 9. Village & Cabin Base
     const village = new StylizedVillageBase(cabinTheme, dockLighting, mountedTrophies);
     scene.add(village.group);
     villageRef.current = village;
 
-    // 10. Player Character
+    // 10. EXACTLY ONE Player Character with ONE Fishing Rod attached
     const player = new StylizedPlayerCharacter();
     player.group.position.copy(playerPosRef.current);
     scene.add(player.group);
     playerRef.current = player;
 
-    // 11. Bobber
+    // 11. EXACTLY ONE Bobber (hidden until active fishing)
     const bobberGroup = new THREE.Group();
     bobberGroup.position.set(0, 0.08, -12);
-    bobberGroup.visible = false; // Hidden until cast!
+    bobberGroup.visible = false;
 
     const bobberTop = new THREE.Mesh(
       new THREE.SphereGeometry(0.12, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -354,7 +340,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     scene.add(bobberGroup);
     bobberGroupRef.current = bobberGroup;
 
-    // 12. Fishing Line
+    // 12. EXACTLY ONE 3D Fishing Line (hidden when not fishing)
     const lineGeo = new THREE.BufferGeometry();
     const linePointsCount = 20;
     const linePositions = new Float32Array(linePointsCount * 3);
@@ -365,7 +351,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       opacity: 0.85,
     });
     const lineMesh = new THREE.Line(lineGeo, lineMat);
-    lineMesh.visible = false; // Hidden when not fishing
+    lineMesh.visible = false;
     scene.add(lineMesh);
     lineMeshRef.current = lineMesh;
 
@@ -402,7 +388,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     scene.add(rain);
     rainParticlesRef.current = rain;
 
-    // Resize
+    // Resize handling
     const handleResize = () => {
       if (!container || !renderer || !camera) return;
       const width = container.clientWidth;
@@ -413,7 +399,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     };
     window.addEventListener('resize', handleResize);
 
-    // Mouse drag for camera rotation
+    // Desktop Mouse Drag for Camera Orbit
     let isDragging = false;
     let prevMouseX = 0;
     let prevMouseY = 0;
@@ -433,8 +419,8 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       prevMouseX = e.clientX;
       prevMouseY = e.clientY;
 
-      cameraYawRef.current -= dx * 0.005;
-      cameraPitchRef.current = Math.max(-0.2, Math.min(0.8, cameraPitchRef.current + dy * 0.004));
+      cameraYawRef.current -= dx * 0.006;
+      cameraPitchRef.current = Math.max(-0.15, Math.min(0.65, cameraPitchRef.current + dy * 0.005));
     };
 
     const handleMouseUp = () => {
@@ -445,13 +431,12 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
 
-    // Touch handlers for right-side camera orbit
+    // Mobile touch controls: Right half of screen controls camera swipe
     const handleTouchStart = (e: TouchEvent) => {
       for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        // If on right half of screen, treat as camera rotation
-        if (t.clientX > window.innerWidth * 0.45 && touchStartRef.current === null) {
-          touchStartRef.current = { x: t.clientX, y: t.clientY, id: t.identifier };
+        const touch = e.changedTouches[i];
+        if (touch.clientX > container.clientWidth * 0.35) {
+          touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
           break;
         }
       }
@@ -460,15 +445,15 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     const handleTouchMove = (e: TouchEvent) => {
       if (!touchStartRef.current) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (t.identifier === touchStartRef.current.id) {
-          const dx = t.clientX - touchStartRef.current.x;
-          const dy = t.clientY - touchStartRef.current.y;
-          touchStartRef.current.x = t.clientX;
-          touchStartRef.current.y = t.clientY;
+        const touch = e.changedTouches[i];
+        if (touch.identifier === touchStartRef.current.id) {
+          const dx = touch.clientX - touchStartRef.current.x;
+          const dy = touch.clientY - touchStartRef.current.y;
+          touchStartRef.current.x = touch.clientX;
+          touchStartRef.current.y = touch.clientY;
 
           cameraYawRef.current -= dx * 0.007;
-          cameraPitchRef.current = Math.max(-0.2, Math.min(0.8, cameraPitchRef.current + dy * 0.005));
+          cameraPitchRef.current = Math.max(-0.15, Math.min(0.65, cameraPitchRef.current + dy * 0.006));
           break;
         }
       }
@@ -488,14 +473,17 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('touchend', handleTouchEnd, { passive: true });
 
-    // --- ANIMATION LOOP ---
+    // 60FPS Centralized Render Loop
     let animationFrameId: number;
-    const clock = new THREE.Clock();
+    let lastTime = performance.now();
+    let elapsedTime = 0;
 
     const renderLoop = () => {
       animationFrameId = requestAnimationFrame(renderLoop);
-      const delta = Math.min(0.1, clock.getDelta());
-      const elapsedTime = clock.getElapsedTime();
+
+      const now = performance.now();
+      const delta = Math.min(0.06, (now - lastTime) / 1000);
+      lastTime = now;
 
       const {
         fishingState: curState,
@@ -504,56 +492,40 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         fishDistance: curDist,
         weather: curWeather,
         timeOfDay: curTime,
-        peers: curPeers,
         customization: curCustom,
         cabinTheme: curCabinTheme,
-        viewMode: curViewMode,
         isPaused: curPaused,
         joystickInput: curJoy,
       } = stateRef.current;
 
-      // Skip dynamic updates when paused
-      if (curPaused) {
-        renderer.render(scene, camera);
-        return;
+      if (!curPaused) {
+        elapsedTime += delta;
       }
 
       // 1. Atmosphere
       const atmos = getAtmosphereSettings(curTime, curWeather);
-      if (skyDomeRef.current) {
-        (skyDomeRef.current.mesh.material as THREE.MeshBasicMaterial).color.set(atmos.skyColor);
-        skyDomeRef.current.update(delta);
-      }
-      if (sunLightRef.current) {
-        sunLightRef.current.color.set(atmos.sunColor);
-        sunLightRef.current.intensity = atmos.sunIntensity;
-        sunLightRef.current.position.set(...atmos.sunPos);
-      }
-      if (ambientLightRef.current) {
-        ambientLightRef.current.color.set(atmos.ambientColor);
-        ambientLightRef.current.intensity = atmos.ambientIntensity;
-      }
-      if (hemiLightRef.current) {
-        hemiLightRef.current.color.set(atmos.hemiSkyColor);
-        hemiLightRef.current.groundColor.set(atmos.hemiGroundColor);
-        hemiLightRef.current.intensity = atmos.hemiIntensity;
-      }
-      if (scene.fog) {
-        const fog = scene.fog as THREE.Fog;
-        fog.color.set(atmos.fogColor);
-        fog.near = atmos.fogNear;
-        fog.far = atmos.fogFar;
-      }
+      scene.fog!.color.set(atmos.fogColor);
+      sun.color.set(atmos.sunColor);
+      sun.intensity = atmos.sunIntensity;
+      ambient.color.set(atmos.ambientColor);
+      ambient.intensity = atmos.ambientIntensity;
+      hemi.color.set(atmos.hemiSkyColor);
+      hemi.groundColor.set(atmos.hemiGroundColor);
+
       if (starsRef.current) {
         (starsRef.current.material as THREE.PointsMaterial).opacity = atmos.starsOpacity;
+      }
+      if (skyDomeRef.current) {
+        (skyDomeRef.current.mesh.material as THREE.MeshBasicMaterial).color.set(atmos.skyColor);
+        if (!curPaused) skyDomeRef.current.update(delta);
       }
       renderer.toneMappingExposure = atmos.exposure;
 
       // 2. Water & props
-      if (waterRef.current) waterRef.current.update(elapsedTime, delta);
-      if (propsRef.current) propsRef.current.update(elapsedTime);
+      if (waterRef.current && !curPaused) waterRef.current.update(elapsedTime, delta);
+      if (propsRef.current && !curPaused) propsRef.current.update(elapsedTime);
       if (villageRef.current) {
-        villageRef.current.update(elapsedTime, delta);
+        if (!curPaused) villageRef.current.update(elapsedTime, delta);
         if (villageRef.current.cabinWallMesh) {
           (villageRef.current.cabinWallMesh.material as THREE.MeshStandardMaterial).color.set(
             CABIN_WALL_COLORS[curCabinTheme] || 0x9a3412
@@ -565,7 +537,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       if (rainParticlesRef.current) {
         const rMat = rainParticlesRef.current.material as THREE.PointsMaterial;
         rMat.opacity = atmos.rainOpacity;
-        if (atmos.rainOpacity > 0) {
+        if (atmos.rainOpacity > 0 && !curPaused) {
           const positions = rainGeo.attributes.position.array as Float32Array;
           const speed = curWeather === 'HEAVY_RAIN' ? 45 : 28;
           for (let i = 1; i < rainPos.length; i += 3) {
@@ -576,8 +548,8 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         }
       }
 
-      // 4. Player Movement & Grounding (Active in IDLE state)
-      const canMove = curState === 'IDLE' && curViewMode === 'FISHING_DOCK';
+      // 4. Player Movement & Grounding (Active in IDLE state when not paused)
+      const canMove = curState === 'IDLE' && !curPaused;
       let moveX = 0;
       let moveZ = 0;
 
@@ -599,13 +571,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
 
         const inputMag = Math.hypot(kx, kz);
         if (inputMag > 0.05) {
-          // Normalize and orient relative to camera yaw
           const angle = Math.atan2(kx, kz) + cameraYawRef.current;
           const speed = (k.shift ? 5.2 : 3.4) * Math.min(1.0, inputMag);
           moveX = Math.sin(angle) * speed;
           moveZ = Math.cos(angle) * speed;
 
-          // Face movement direction smoothly
           const targetRot = Math.atan2(moveX, moveZ);
           playerRotYRef.current = THREE.MathUtils.lerp(playerRotYRef.current, targetRot, delta * 12);
         }
@@ -653,11 +623,9 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       // 5. Bobber Visibility & Water Physics
       const isFishingActive =
         curState === 'CASTING' ||
-        curState === 'BOBBER_ACTIVE' ||
-        curState === 'FISH_APPROACHING' ||
+        curState === 'WAITING' ||
         curState === 'BITE' ||
         curState === 'HOOKED' ||
-        curState === 'FISH_STRUGGLING' ||
         curState === 'REELING';
 
       if (bobberGroupRef.current) {
@@ -665,51 +633,45 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         const bg = bobberGroupRef.current;
 
         if (isFishingActive) {
-          // Cast target based on player's position & forward vector
           const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
             new THREE.Vector3(0, 1, 0),
             playerRotYRef.current
           );
-          const castDist = Math.max(6, curDist);
+          const castDist = Math.max(5, curDist);
           const targetX = currPos.x + forward.x * castDist;
           const targetZ = currPos.z + forward.z * castDist;
 
           bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 5);
           bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 4);
 
-          const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.09;
-          let bobberY = waterY + 0.06;
+          // Water surface wave height
+          const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.08;
+          let bobberY = waterY + 0.05;
 
           if (curState === 'BITE') {
-            bobberY -= 0.18 + Math.sin(elapsedTime * 18) * 0.06;
-            bg.rotation.z = Math.sin(elapsedTime * 15) * 0.35;
+            bobberY -= 0.16 + Math.sin(elapsedTime * 18) * 0.05;
+            bg.rotation.z = Math.sin(elapsedTime * 15) * 0.3;
             if (waterRef.current && Math.random() > 0.6) {
               waterRef.current.addRipple(bg.position.x, bg.position.z, 1.2);
             }
-          } else if (curState === 'FISH_APPROACHING') {
-            bobberY -= 0.04 + Math.sin(elapsedTime * 8) * 0.03;
-            bg.rotation.z = Math.sin(elapsedTime * 6) * 0.15;
-            if (waterRef.current && Math.random() > 0.85) {
-              waterRef.current.addRipple(bg.position.x, bg.position.z, 0.7);
-            }
           } else {
-            bg.rotation.z = Math.sin(elapsedTime * 2) * 0.08;
+            bg.rotation.z = Math.sin(elapsedTime * 2) * 0.06;
           }
           bg.position.y = bobberY;
         } else {
-          // Reset bobber back to player when not fishing
-          bg.position.set(currPos.x, currPos.y, currPos.z - 1.0);
+          // Keep reset position at player's feet
+          bg.position.set(currPos.x, currPos.y, currPos.z - 0.5);
         }
       }
 
-      // 6. 3D Line Rendering
+      // 6. EXACTLY ONE 3D Fishing Line
       if (lineMeshRef.current) {
         lineMeshRef.current.visible = isFishingActive;
         if (isFishingActive && bobberGroupRef.current && playerRef.current) {
           const positions = lineMeshRef.current.geometry.attributes.position.array as Float32Array;
           const start = playerRef.current.rodTipPosition;
           const end = bobberGroupRef.current.position;
-          const droopFactor = (1 - curTension) * 0.5;
+          const droopFactor = (1 - curTension) * 0.45;
 
           for (let i = 0; i < linePointsCount; i++) {
             const t = i / (linePointsCount - 1);
@@ -726,65 +688,46 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         }
       }
 
-      // 7. Fish Shadow
+      // 7. Fish Shadow (Approaching underwater)
       if (fishShadowRef.current && bobberGroupRef.current) {
         const fs = fishShadowRef.current;
         const bg = bobberGroupRef.current;
         const fsMat = fs.material as THREE.MeshBasicMaterial;
 
-        if (
-          isFishingActive &&
-          (curState === 'FISH_APPROACHING' ||
-            curState === 'BITE' ||
-            curState === 'HOOKED' ||
-            curState === 'FISH_STRUGGLING')
-        ) {
+        if (isFishingActive && (curState === 'WAITING' || curState === 'BITE' || curState === 'HOOKED')) {
           fs.visible = true;
-          fsMat.opacity = THREE.MathUtils.lerp(fsMat.opacity, 0.75, delta * 3);
-          const circleOffset = curState === 'FISH_APPROACHING' ? Math.sin(elapsedTime * 2.5) * 1.2 : 0;
+          fsMat.opacity = THREE.MathUtils.lerp(fsMat.opacity, 0.7, delta * 3);
+          const circleOffset = Math.sin(elapsedTime * 2.2) * 0.9;
           fs.position.x = bg.position.x + circleOffset;
-          fs.position.z = bg.position.z + (curState === 'FISH_APPROACHING' ? Math.cos(elapsedTime * 2.5) * 1.2 : 0);
-          fs.position.y = -0.28;
-          fs.rotation.y = elapsedTime * 2.5;
+          fs.position.z = bg.position.z + Math.cos(elapsedTime * 2.2) * 0.9;
+          fs.position.y = -0.26;
+          fs.rotation.y = elapsedTime * 2.2;
         } else {
           fsMat.opacity = THREE.MathUtils.lerp(fsMat.opacity, 0, delta * 4);
           if (fsMat.opacity < 0.05) fs.visible = false;
         }
       }
 
-      // 8. Third-Person Camera with smooth follow & orbit
+      // 8. Third-Person Camera: distance 4.8–5.5m, height 2.2m
       if (cameraRef.current) {
         const cam = cameraRef.current;
 
-        if (curViewMode === 'PLAYER_CABIN') {
-          cam.position.lerp(new THREE.Vector3(-4.5, 2.6, 7.8), delta * 2.0);
-          cam.lookAt(0, 2.2, 13.5);
-        } else if (curViewMode === 'UNDERWATER_SONAR') {
-          cam.position.lerp(new THREE.Vector3(0, -1.8, -8.0), delta * 2.5);
-          cam.lookAt(0, -1.2, -18);
-        } else {
-          // Dynamic camera distance & position based on orbit yaw/pitch
-          const camDist = curState === 'IDLE' ? 5.5 : 4.8;
-          const camHeight = 1.8 + Math.sin(cameraPitchRef.current) * 2.2;
-          const orbitRadius = camDist * Math.cos(cameraPitchRef.current);
+        const camDist = curState === 'IDLE' ? 5.2 : 4.4; // Moves slightly closer during fishing
+        const camHeight = 2.2 + Math.sin(cameraPitchRef.current) * 2.0;
+        const orbitRadius = camDist * Math.cos(cameraPitchRef.current);
 
-          const camTargetX = currPos.x - Math.sin(cameraYawRef.current) * orbitRadius;
-          const camTargetZ = currPos.z + Math.cos(cameraYawRef.current) * orbitRadius;
-          const camTargetY = Math.max(0.6, currPos.y + camHeight);
+        const camTargetX = currPos.x - Math.sin(cameraYawRef.current) * orbitRadius;
+        const camTargetZ = currPos.z + Math.cos(cameraYawRef.current) * orbitRadius;
+        const camTargetY = Math.max(0.6, currPos.y + camHeight);
 
-          // Struggle shake
-          let shakeX = 0;
-          if (curState === 'FISH_STRUGGLING' || curState === 'REELING') {
-            shakeX = Math.sin(elapsedTime * 8) * 0.08;
-          }
-
-          cam.position.lerp(new THREE.Vector3(camTargetX + shakeX, camTargetY, camTargetZ), delta * 5);
-          cam.lookAt(currPos.x, currPos.y + 1.2, currPos.z);
+        let shakeX = 0;
+        if (curState === 'REELING') {
+          shakeX = Math.sin(elapsedTime * 12) * 0.05;
         }
-      }
 
-      // Multiplayer peers
-      updatePeerModels(curPeers, scene, peerMeshesRef.current);
+        cam.position.lerp(new THREE.Vector3(camTargetX + shakeX, camTargetY, camTargetZ), delta * 5);
+        cam.lookAt(currPos.x, currPos.y + 1.1, currPos.z);
+      }
 
       renderer.render(scene, camera);
     };
@@ -801,64 +744,21 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
 
-      if (rendererRef.current && container.contains(rendererRef.current.domElement)) {
-        container.removeChild(rendererRef.current.domElement);
+      if (rendererRef.current && rendererRef.current.domElement) {
+        rendererRef.current.dispose();
+        if (container.contains(rendererRef.current.domElement)) {
+          container.removeChild(rendererRef.current.domElement);
+        }
       }
-      renderer.dispose();
     };
   }, []);
 
   return (
     <div
+      id="three-canvas-container"
       ref={containerRef}
       onClick={onCanvasClick}
       className="relative w-full h-full cursor-grab active:cursor-grabbing select-none touch-none overflow-hidden"
     />
   );
 };
-
-// Update peer angler models
-function updatePeerModels(peers: AnglerPeer[], scene: THREE.Scene, peerMeshes: Map<string, THREE.Group>) {
-  peers.forEach((peer) => {
-    let group = peerMeshes.get(peer.id);
-    if (!group) {
-      group = new THREE.Group();
-      group.position.set(...peer.position);
-      group.rotation.y = peer.rotationY;
-
-      const bodyMat = new THREE.MeshStandardMaterial({ color: peer.color, roughness: 0.7, flatShading: true });
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.85, 7), bodyMat);
-      body.position.y = 0.45;
-      group.add(body);
-
-      const head = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(0.18, 0),
-        new THREE.MeshStandardMaterial({ color: 0xf5d0b5 })
-      );
-      head.position.y = 1.05;
-      group.add(head);
-
-      const hat = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.22, 0.15, 8),
-        new THREE.MeshStandardMaterial({ color: 0x3d5a45 })
-      );
-      hat.position.y = 1.18;
-      group.add(hat);
-
-      const peerRod = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.015, 0.03, 2.8, 6),
-        new THREE.MeshStandardMaterial({ color: 0x92400e })
-      );
-      peerRod.position.set(0.25, 0.9, 0.8);
-      peerRod.rotation.x = -Math.PI / 4;
-      group.add(peerRod);
-
-      scene.add(group);
-      peerMeshes.set(peer.id, group);
-    }
-
-    if (peer.state === 'reeling') {
-      group.position.y = peer.position[1] + Math.sin(Date.now() * 0.01) * 0.04;
-    }
-  });
-}

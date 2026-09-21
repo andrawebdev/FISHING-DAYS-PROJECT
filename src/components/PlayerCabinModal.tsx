@@ -113,15 +113,16 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
 
   // Craft item handler
   const handleCraft = (recipe: CraftingRecipe) => {
+    const cost = recipe.coinsCost || 0;
     // Validate coins
-    if (coins < recipe.coinsCost) {
-      setCraftMessage(`❌ Not enough coins! Need ${recipe.coinsCost} coins.`);
+    if (coins < cost) {
+      setCraftMessage(`❌ Not enough coins! Need ${cost} coins.`);
       setTimeout(() => setCraftMessage(null), 2500);
       return;
     }
 
     // Validate materials
-    for (const req of recipe.requiredMaterials) {
+    for (const req of recipe.requiredMaterials || []) {
       const currentCount = craftingMaterials[req.materialId] || 0;
       if (currentCount < req.amount) {
         setCraftMessage(`❌ Missing materials for ${recipe.name}!`);
@@ -131,9 +132,9 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
     }
 
     // Deduct coins & materials
-    onUpdateCoins(coins - recipe.coinsCost);
+    onUpdateCoins(coins - cost);
     const updatedMats = { ...craftingMaterials };
-    for (const req of recipe.requiredMaterials) {
+    for (const req of recipe.requiredMaterials || []) {
       updatedMats[req.materialId] -= req.amount;
     }
     onUpdateCraftingMaterials(updatedMats);
@@ -245,8 +246,9 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
               {/* 4 Plaque Slots Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[1, 2, 3, 4].map((slotIdx) => {
-                  const trophy = mountedTrophies.find((t) => t.slot === slotIdx);
-                  const plaqueStyle = trophy ? PLAQUE_COLORS[trophy.plaqueStyle] : null;
+                  const trophy = mountedTrophies.find((t) => (t.slot ?? t.slotIndex) === slotIdx);
+                  const trophyPlaqueKey = (trophy?.plaqueStyle || 'BRONZE') as PlaqueStyle;
+                  const plaqueStyle = trophy ? (PLAQUE_COLORS[trophyPlaqueKey] || PLAQUE_COLORS.BRONZE) : null;
 
                   return (
                     <div
@@ -271,24 +273,24 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
                           <div className="text-center my-3">
                             <span className="text-4xl filter drop-shadow-md block mb-1">🐟</span>
                             <h4 className="text-sm font-bold text-white tracking-tight">
-                              {trophy.speciesName}
+                              {trophy.speciesName || trophy.catchRecord?.speciesName || 'Prize Catch'}
                             </h4>
-                            <span className={`text-[11px] font-semibold uppercase tracking-wider ${RARITY_COLORS[trophy.rarity]}`}>
-                              {trophy.rarity}
+                            <span className={`text-[11px] font-semibold uppercase tracking-wider ${RARITY_COLORS[(trophy.rarity || trophy.catchRecord?.rarity || 'COMMON') as FishRarity] || 'text-slate-300'}`}>
+                              {trophy.rarity || trophy.catchRecord?.rarity || 'COMMON'}
                             </span>
                           </div>
 
                           <div className="bg-black/30 rounded-xl p-2.5 border border-white/5 text-[11px] font-mono space-y-1">
                             <div className="flex justify-between text-slate-400">
                               <span>Weight:</span>
-                              <span className="text-amber-300 font-bold">{trophy.weight.toFixed(2)} kg</span>
+                              <span className="text-amber-300 font-bold">{(trophy.weight || trophy.catchRecord?.weight || 0).toFixed(2)} kg</span>
                             </div>
                             <div className="flex justify-between text-slate-400">
                               <span>Length:</span>
-                              <span className="text-cyan-300 font-bold">{trophy.length.toFixed(1)} cm</span>
+                              <span className="text-cyan-300 font-bold">{(trophy.length || trophy.catchRecord?.length || 0).toFixed(1)} cm</span>
                             </div>
                             <div className="text-[10px] text-slate-500 truncate pt-1 border-t border-white/5">
-                              {trophy.caughtAt}
+                              {trophy.caughtAt || trophy.catchRecord?.caughtAt || 'Recent'}
                             </div>
                           </div>
 
@@ -420,9 +422,10 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {CRAFTING_RECIPES.map((recipe) => {
-                    const hasCoins = coins >= recipe.coinsCost;
-                    const canAffordMats = recipe.requiredMaterials.every(
-                      (req) => (craftingMaterials[req.materialId] || 0) >= req.amount
+                    const recipeCost = recipe.coinsCost || 0;
+                    const hasCoins = coins >= recipeCost;
+                    const canAffordMats = (recipe.requiredMaterials || []).every(
+                      (req: any) => (craftingMaterials[req.materialId] || 0) >= req.amount
                     );
                     const canCraft = hasCoins && canAffordMats;
 
@@ -434,7 +437,7 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
                         <div>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{recipe.icon}</span>
+                              <span className="text-2xl">{recipe.icon || '🔨'}</span>
                               <h5 className="text-sm font-bold text-white">{recipe.name}</h5>
                             </div>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-amber-300">
@@ -449,11 +452,11 @@ export const PlayerCabinModal: React.FC<PlayerCabinModalProps> = ({
                             <div className="flex items-center justify-between font-mono">
                               <span className="text-slate-400">Workshop Fee:</span>
                               <span className={hasCoins ? 'text-amber-400' : 'text-red-400'}>
-                                {recipe.coinsCost} coins
+                                {recipeCost} coins
                               </span>
                             </div>
 
-                            {recipe.requiredMaterials.map((req) => {
+                            {(recipe.requiredMaterials || []).map((req: any) => {
                               const have = craftingMaterials[req.materialId] || 0;
                               const ok = have >= req.amount;
                               const label = req.materialId.replace('_', ' ');

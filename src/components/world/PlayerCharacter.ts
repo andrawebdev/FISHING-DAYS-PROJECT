@@ -236,35 +236,31 @@ export class StylizedPlayerCharacter {
       this.rightLegGroup.rotation.x = 0;
     }
 
-    if (state === 'IDLE' || state === 'BOBBER_ACTIVE' || state === 'FISH_APPROACHING') {
+    if (state === 'IDLE' || state === 'WAITING' || state === 'CANCELLED') {
       // Relaxed idle stance
       this.rightArmGroup.rotation.x = -0.6 + Math.sin(time * 1.5) * 0.03;
       this.rightArmGroup.rotation.z = 0.2;
       this.leftArmGroup.rotation.x = -0.3 + Math.cos(time * 1.8) * 0.03;
       this.rodGroup.rotation.x = Math.sin(time * 1.5) * 0.04;
       this.rodGroup.rotation.z = 0;
-    } else if (state === 'PREPARING') {
-      // Winding back for a cast
+    } else if (state === 'CASTING') {
+      // Forward cast whip
       const prepAngle = -0.4 - castPower * 0.8;
       this.rightArmGroup.rotation.x = prepAngle;
       this.rodGroup.rotation.x = -prepAngle * 0.9;
-    } else if (state === 'CASTING') {
-      // Forward cast whip
-      this.rightArmGroup.rotation.x = 0.6;
-      this.rodGroup.rotation.x = -0.7;
     } else if (state === 'BITE') {
       // Alert jolt
       this.headGroup.rotation.x = 0.1;
       this.rightArmGroup.rotation.x = -0.9 + Math.sin(time * 20) * 0.06;
       this.rodGroup.rotation.x = 0.2;
-    } else if (state === 'FISH_STRUGGLING' || state === 'REELING') {
+    } else if (state === 'HOOKED' || state === 'REELING') {
       // Fighting fish: rod bent, arms straining, reeling handle turning
       const strainBend = tension * 0.55;
       this.rightArmGroup.rotation.x = -0.9 - strainBend + Math.sin(time * 14) * 0.05;
       this.leftArmGroup.rotation.x = -0.7 + Math.sin(time * 18) * 0.15; // Cranking reel
       this.rodGroup.rotation.x = 0.35 + strainBend + Math.sin(time * 14) * 0.06;
       this.torsoGroup.rotation.x = -strainBend * 0.3;
-    } else if (state === 'SUCCESS') {
+    } else if (state === 'CAUGHT') {
       // Celebratory hold rod up high!
       this.rightArmGroup.rotation.x = -1.4;
       this.leftArmGroup.rotation.x = -1.4;

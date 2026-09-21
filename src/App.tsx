@@ -15,26 +15,16 @@ import {
   CabinTheme,
   DockLighting,
   MountedTrophy,
-  ViewMode,
-  CraftingRecipe,
 } from './types';
 import { FISH_DATABASE } from './data/fishDatabase';
 import { RODS, REELS, LINES, BAITS, LURES } from './data/gearDatabase';
 import { soundEngine } from './services/soundEngine';
-import { LeaderboardService } from './services/leaderboardService';
-import { multiplayerService } from './services/multiplayerService';
 import { ThreeCanvas } from './components/ThreeCanvas';
 import { FishingHUD } from './components/FishingHUD';
 import { MobileJoystick } from './components/MobileJoystick';
 import { CatchModal } from './components/CatchModal';
 import { FishCollectionModal } from './components/FishCollectionModal';
-import { TackleShopModal } from './components/TackleShopModal';
-import { LeaderboardModal } from './components/LeaderboardModal';
-import { MultiplayerChatDrawer } from './components/MultiplayerChatDrawer';
 import { EnvironmentControlBar } from './components/EnvironmentControlBar';
-import { GearCustomizationModal } from './components/GearCustomizationModal';
-import { PlayerCabinModal } from './components/PlayerCabinModal';
-import { UnderwaterEcosystemHUD } from './components/UnderwaterEcosystemHUD';
 
 export default function App() {
   // --- PLAYER PROGRESSION & INVENTORY STATE ---
@@ -44,15 +34,6 @@ export default function App() {
       return saved ? Math.max(0, parseInt(saved, 10)) : 150;
     } catch {
       return 150;
-    }
-  });
-
-  const [playerName] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_player_name');
-      return saved || 'Angler_' + Math.floor(1000 + Math.random() * 9000);
-    } catch {
-      return 'Angler_1234';
     }
   });
 
@@ -69,112 +50,28 @@ export default function App() {
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
   // Equipped Gear
-  const [equippedRodId, setEquippedRodId] = useState<string>('bamboo_starter');
-  const [equippedReelId, setEquippedReelId] = useState<string>('basic_reel');
-  const [equippedLineId, setEquippedLineId] = useState<string>('mono_starter');
-  const [equippedBaitId, setEquippedBaitId] = useState<string>('bread_crumbs');
-  const [equippedLureId, setEquippedLureId] = useState<string>(LURES[0]?.id || 'feather_spinner');
-
-  const [unlockedGearIds, setUnlockedGearIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_unlocked_gear');
-      return saved ? JSON.parse(saved) : ['bamboo_starter', 'basic_reel', 'mono_starter'];
-    } catch {
-      return ['bamboo_starter', 'basic_reel', 'mono_starter'];
-    }
-  });
-
-  const [baitInventory, setBaitInventory] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_bait_inv');
-      return saved ? JSON.parse(saved) : { bread_crumbs: 25, earthworm: 15 };
-    } catch {
-      return { bread_crumbs: 25, earthworm: 15 };
-    }
-  });
+  const [equippedRodId] = useState<string>('bamboo_starter');
+  const [equippedReelId] = useState<string>('basic_reel');
+  const [equippedLineId] = useState<string>('mono_starter');
+  const [equippedBaitId] = useState<string>('bread_crumbs');
 
   // Gear Customization State
-  const [customization, setCustomization] = useState<GearCustomization>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_customization');
-      return saved
-        ? JSON.parse(saved)
-        : {
-            rodColor: '#a16207',
-            rodPattern: 'SOLID',
-            handleGrip: 'NATURAL_CORK',
-            guideRingColor: '#eab308',
-            reelMetalTint: 'SILVER',
-            lineTint: 'CLEAR',
-            bobberStyle: 'CLASSIC_SPHERE',
-          };
-    } catch {
-      return {
-        rodColor: '#a16207',
-        rodPattern: 'SOLID',
-        handleGrip: 'NATURAL_CORK',
-        guideRingColor: '#eab308',
-        reelMetalTint: 'SILVER',
-        lineTint: 'CLEAR',
-        bobberStyle: 'CLASSIC_SPHERE',
-      };
-    }
-  });
+  const [customization] = useState<GearCustomization>(() => ({
+    rodColor: '#a16207',
+    rodPattern: 'SOLID',
+    handleGrip: 'NATURAL_CORK',
+    guideRingColor: '#eab308',
+    reelMetalTint: 'SILVER',
+    lineTint: 'CLEAR',
+    bobberStyle: 'CLASSIC_SPHERE',
+  }));
 
   // Player Cabin & Base State
-  const [cabinTheme, setCabinTheme] = useState<CabinTheme>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_cabin_theme') as CabinTheme;
-      return saved || 'RUSTIC_CEDAR';
-    } catch {
-      return 'RUSTIC_CEDAR';
-    }
-  });
+  const [cabinTheme] = useState<CabinTheme>('RUSTIC_CEDAR');
+  const [dockLighting] = useState<DockLighting>('EDISON_BULBS');
+  const [mountedTrophies] = useState<MountedTrophy[]>([]);
 
-  const [dockLighting, setDockLighting] = useState<DockLighting>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_dock_lighting') as DockLighting;
-      return saved || 'EDISON_BULBS';
-    } catch {
-      return 'EDISON_BULBS';
-    }
-  });
-
-  const [mountedTrophies, setMountedTrophies] = useState<MountedTrophy[]>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_trophies');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-
-  const [craftingMaterials, setCraftingMaterials] = useState<Record<string, number>>(() => {
-    try {
-      const saved = localStorage.getItem('fishing_days_craft_mats');
-      return saved
-        ? JSON.parse(saved)
-        : {
-            fish_scales: 14,
-            lake_driftwood: 10,
-            polished_pebble: 8,
-            feather_down: 6,
-            firefly_essence: 3,
-            pearl_shards: 2,
-          };
-    } catch {
-      return {
-        fish_scales: 14,
-        lake_driftwood: 10,
-        polished_pebble: 8,
-        feather_down: 6,
-        firefly_essence: 3,
-        pearl_shards: 2,
-      };
-    }
-  });
-
-  // Catch history for trophies & statistics
+  // Catch history
   const [catchHistory, setCatchHistory] = useState<CatchRecord[]>(() => {
     try {
       const saved = localStorage.getItem('fishing_days_catch_history');
@@ -197,9 +94,8 @@ export default function App() {
   // --- ENVIRONMENT & ATMOSPHERE ---
   const [weather, setWeather] = useState<WeatherType>('SUNNY');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('DAY');
-  const [viewMode, setViewMode] = useState<ViewMode>('FISHING_DOCK');
 
-  // --- FISHING STATE MACHINE & GROUND POSITION ---
+  // --- STRICT FISHING STATE MACHINE: IDLE → CASTING → WAITING → BITE → HOOKED → REELING → CAUGHT → IDLE ---
   const [fishingState, setFishingState] = useState<FishingState>('IDLE');
   const [canFish, setCanFish] = useState<boolean>(true);
   const [castPower, setCastPower] = useState<number>(0);
@@ -216,15 +112,6 @@ export default function App() {
   // UI Modals
   const [showCatchModal, setShowCatchModal] = useState<boolean>(false);
   const [showCollectionModal, setShowCollectionModal] = useState<boolean>(false);
-  const [showShopModal, setShowShopModal] = useState<boolean>(false);
-  const [showLeaderboardModal, setShowLeaderboardModal] = useState<boolean>(false);
-  const [showMultiplayerDrawer, setShowMultiplayerDrawer] = useState<boolean>(false);
-  const [showCustomizationModal, setShowCustomizationModal] = useState<boolean>(false);
-  const [showCabinModal, setShowCabinModal] = useState<boolean>(false);
-  const [showEcosystemHUD, setShowEcosystemHUD] = useState<boolean>(false);
-
-  // Multiplayer peers
-  const [peers, setPeers] = useState(multiplayerService.getPeers());
 
   // Strict Timer References to prevent memory leaks and orphaned intervals
   const castChargeTimerRef = useRef<number | null>(null);
@@ -243,7 +130,6 @@ export default function App() {
   const equippedReel = REELS.find((r) => r.id === equippedReelId) || REELS[0];
   const equippedLine = LINES.find((l) => l.id === equippedLineId) || LINES[0];
   const equippedBait = BAITS.find((b) => b.id === equippedBaitId) || BAITS[0];
-  const equippedLure = LURES.find((l) => l.id === equippedLureId) || LURES[0];
 
   // Local persistence sync
   useEffect(() => {
@@ -260,51 +146,9 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('fishing_days_unlocked_gear', JSON.stringify(unlockedGearIds));
-    } catch {}
-  }, [unlockedGearIds]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_bait_inv', JSON.stringify(baitInventory));
-    } catch {}
-  }, [baitInventory]);
-
-  useEffect(() => {
-    try {
       localStorage.setItem('fishing_days_collection', JSON.stringify(unlockedCatches));
     } catch {}
   }, [unlockedCatches]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_customization', JSON.stringify(customization));
-    } catch {}
-  }, [customization]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_cabin_theme', cabinTheme);
-    } catch {}
-  }, [cabinTheme]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_dock_lighting', dockLighting);
-    } catch {}
-  }, [dockLighting]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_trophies', JSON.stringify(mountedTrophies));
-    } catch {}
-  }, [mountedTrophies]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('fishing_days_craft_mats', JSON.stringify(craftingMaterials));
-    } catch {}
-  }, [craftingMaterials]);
 
   useEffect(() => {
     try {
@@ -312,57 +156,21 @@ export default function App() {
     } catch {}
   }, [catchHistory]);
 
-  // Subscribe to multiplayer peers
+  // Weather & Atmosphere Sounds
   useEffect(() => {
-    const unsub = multiplayerService.subscribe(() => {
-      setPeers([...multiplayerService.getPeers()]);
-    });
-    return unsub;
-  }, []);
+    if (soundEnabled && !isPaused) {
+      soundEngine.setMute(false);
+      soundEngine.updateAtmosphere(weather, timeOfDay);
+    } else {
+      soundEngine.setMute(true);
+    }
+  }, [weather, timeOfDay, soundEnabled, isPaused]);
 
-  // Sync Audio Atmosphere
-  useEffect(() => {
-    soundEngine.init();
-    soundEngine.updateAtmosphere(weather, timeOfDay);
-  }, [weather, timeOfDay]);
-
-  // Dynamic Day/Night Cycle (Every 90 seconds advances time, unless paused)
-  useEffect(() => {
-    const timeCycle: TimeOfDay[] = ['MORNING', 'DAY', 'AFTERNOON', 'SUNSET', 'NIGHT'];
-    const weatherCycle: WeatherType[] = ['SUNNY', 'CLOUDY', 'RAIN', 'HEAVY_RAIN', 'FOG'];
-
-    const interval = window.setInterval(() => {
-      if (isPaused) return;
-
-      setTimeOfDay((prev) => {
-        const nextIdx = (timeCycle.indexOf(prev) + 1) % timeCycle.length;
-        return timeCycle[nextIdx];
-      });
-
-      if (Math.random() < 0.35) {
-        setWeather((prev) => {
-          const nextIdx = (weatherCycle.indexOf(prev) + 1) % weatherCycle.length;
-          return weatherCycle[nextIdx];
-        });
-      }
-    }, 90000);
-
-    return () => clearInterval(interval);
-  }, [isPaused]);
-
-  // Clean all fishing timers helper
+  // Clean timer disposal function
   const clearAllFishingTimers = useCallback(() => {
     if (castChargeTimerRef.current) {
       clearInterval(castChargeTimerRef.current);
       castChargeTimerRef.current = null;
-    }
-    if (castLandingTimerRef.current) {
-      clearTimeout(castLandingTimerRef.current);
-      castLandingTimerRef.current = null;
-    }
-    if (approachTimerRef.current) {
-      clearTimeout(approachTimerRef.current);
-      approachTimerRef.current = null;
     }
     if (biteTimeoutRef.current) {
       clearTimeout(biteTimeoutRef.current);
@@ -372,31 +180,48 @@ export default function App() {
       clearTimeout(biteWindowTimerRef.current);
       biteWindowTimerRef.current = null;
     }
-    if (hookTransitionTimerRef.current) {
-      clearTimeout(hookTransitionTimerRef.current);
-      hookTransitionTimerRef.current = null;
+    if (approachTimerRef.current) {
+      clearTimeout(approachTimerRef.current);
+      approachTimerRef.current = null;
     }
     if (gameLoopTimerRef.current) {
       clearInterval(gameLoopTimerRef.current);
       gameLoopTimerRef.current = null;
     }
+    if (castLandingTimerRef.current) {
+      clearTimeout(castLandingTimerRef.current);
+      castLandingTimerRef.current = null;
+    }
+    if (hookTransitionTimerRef.current) {
+      clearTimeout(hookTransitionTimerRef.current);
+      hookTransitionTimerRef.current = null;
+    }
     isHookingRef.current = false;
     isCastingRef.current = false;
   }, []);
 
-  // --- FISH ENCOUNTER ALGORITHM ---
+  // Cleanup on unmount or pause
+  useEffect(() => {
+    return () => {
+      clearAllFishingTimers();
+      soundEngine.stopTensionSound();
+      soundEngine.stopReelingSound();
+    };
+  }, [clearAllFishingTimers]);
+
+  // Fish spawning & weight scoring logic
   const selectEligibleFish = useCallback((): FishSpecies => {
-    const baitBoost = equippedBait.rarityBoostPercent;
-
     const scored = FISH_DATABASE.map((fish) => {
-      let weight = 10;
-      if (fish.preferredWeather.includes(weather)) weight += 15;
-      if (fish.preferredTime.includes(timeOfDay)) weight += 15;
-      if (fish.preferredBait.includes(equippedBait.id)) weight += 30;
+      let weight = 1.0;
 
+      if (fish.preferredWeather.includes(weather)) weight *= 1.8;
+      if (fish.preferredTime.includes(timeOfDay)) weight *= 1.6;
+      if (fish.preferredBait.includes(equippedBait.id)) weight *= 2.2;
+
+      const baitBoost = equippedBait.rarityBoostPercent || 0;
       switch (fish.rarity) {
         case 'COMMON':
-          weight *= 4;
+          weight *= 4.0;
           break;
         case 'UNCOMMON':
           weight *= 2.5 + baitBoost * 0.02;
@@ -440,7 +265,7 @@ export default function App() {
 
     biteWindowTimerRef.current = window.setTimeout(() => {
       soundEngine.playHookEscape();
-      setFishingState('FAILED');
+      setFishingState('CANCELLED');
     }, reactionWindow);
   }, []);
 
@@ -453,9 +278,7 @@ export default function App() {
     const approachDelay = baseDelay * speedMultiplier;
 
     approachTimerRef.current = window.setTimeout(() => {
-      setFishingState('FISH_APPROACHING');
       soundEngine.playFishApproaching();
-
       const candidateFish = selectEligibleFish();
       setActiveFish(candidateFish);
 
@@ -471,7 +294,7 @@ export default function App() {
     if (fishingState !== 'IDLE' || !canFish || isPaused || isCastingRef.current) return;
     clearAllFishingTimers();
     soundEngine.resume();
-    setFishingState('PREPARING');
+    setFishingState('CASTING');
     setCastPower(0.2);
 
     let power = 0.2;
@@ -495,11 +318,10 @@ export default function App() {
       castChargeTimerRef.current = null;
     }
 
-    if (fishingState !== 'PREPARING' || !canFish || isCastingRef.current) return;
+    if (fishingState !== 'CASTING' || !canFish || isCastingRef.current) return;
     isCastingRef.current = true;
 
     soundEngine.playCastWhoosh();
-    setFishingState('CASTING');
 
     const maxCast = 8 + castPower * 14 * (1 + equippedRod.castDistanceBonus / 100);
     setFishDistance(maxCast);
@@ -508,7 +330,7 @@ export default function App() {
     castLandingTimerRef.current = window.setTimeout(() => {
       isCastingRef.current = false;
       soundEngine.playBobberSplash();
-      setFishingState('BOBBER_ACTIVE');
+      setFishingState('WAITING');
       setLineTension(0.35);
 
       scheduleFishApproach();
@@ -527,17 +349,17 @@ export default function App() {
 
     soundEngine.playHookSuccess();
     setFishingState('HOOKED');
+    setLineTension(0.45);
 
     hookTransitionTimerRef.current = window.setTimeout(() => {
       isHookingRef.current = false;
-      setFishingState('FISH_STRUGGLING');
-      setLineTension(0.45);
-    }, 400);
+      // Ready to reel
+    }, 300);
   }, [fishingState]);
 
   const handleStartReel = useCallback(() => {
     if (isPaused) return;
-    if (fishingState !== 'FISH_STRUGGLING' && fishingState !== 'REELING') return;
+    if (fishingState !== 'HOOKED' && fishingState !== 'REELING') return;
     setIsReeling(true);
     setFishingState('REELING');
     soundEngine.startReelingSound();
@@ -547,7 +369,7 @@ export default function App() {
     setIsReeling(false);
     soundEngine.stopReelingSound();
     if (fishingState === 'REELING') {
-      setFishingState('FISH_STRUGGLING');
+      setFishingState('HOOKED');
     }
   }, [fishingState]);
 
@@ -578,7 +400,7 @@ export default function App() {
       length: caughtLength,
       value: actualValue,
       caughtAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      caughtBy: playerName,
+      caughtBy: 'Angler',
       weather,
       timeOfDay,
       location: 'Village Dock Waters',
@@ -587,47 +409,19 @@ export default function App() {
     // Store in history
     setCatchHistory((prev) => [record, ...prev.slice(0, 49)]);
 
-    // Award Crafting Materials based on catch
-    setCraftingMaterials((prev) => {
-      const updated = { ...prev };
-      const scalesGained = Math.floor(Math.random() * 3) + 1;
-      updated.fish_scales = (updated.fish_scales || 0) + scalesGained;
-
-      if (fish.rarity === 'RARE' || fish.rarity === 'EPIC') {
-        updated.polished_pebble = (updated.polished_pebble || 0) + 1;
-      }
-      if (fish.rarity === 'LEGENDARY' || fish.rarity === 'MYTHIC') {
-        updated.pearl_shards = (updated.pearl_shards || 0) + 1;
-        updated.firefly_essence = (updated.firefly_essence || 0) + 1;
-      }
-      return updated;
-    });
-
     // Check personal record
     const existing = unlockedCatches[fish.id];
     const isNewBest = !existing || caughtWeight > existing.weight;
     setIsNewRecordCatch(isNewBest);
 
-    // Update global leaderboard
-    LeaderboardService.submitCatch(record);
-
-    // Broadcast catch to multiplayer peers
-    multiplayerService.broadcastPlayerCatch(playerName, fish.name, fish.rarity, caughtWeight);
-
-    // Consume 1 bait if available
-    setBaitInventory((prev) => {
-      const cur = prev[equippedBait.id] || 0;
-      return { ...prev, [equippedBait.id]: Math.max(0, cur - 1) };
-    });
-
     setLastCatchRecord(record);
-    setFishingState('SUCCESS');
+    setFishingState('CAUGHT');
     setShowCatchModal(true);
-  }, [activeFish, playerName, weather, timeOfDay, unlockedCatches, equippedBait, clearAllFishingTimers]);
+  }, [activeFish, weather, timeOfDay, unlockedCatches, clearAllFishingTimers]);
 
-  // --- ACTIVE FIGHT GAME LOOP ---
+  // --- ACTIVE FIGHT GAME LOOP: Smooth line tension calculation ---
   useEffect(() => {
-    if (isPaused || (fishingState !== 'FISH_STRUGGLING' && fishingState !== 'REELING')) {
+    if (isPaused || (fishingState !== 'HOOKED' && fishingState !== 'REELING')) {
       if (gameLoopTimerRef.current) {
         clearInterval(gameLoopTimerRef.current);
         gameLoopTimerRef.current = null;
@@ -643,30 +437,35 @@ export default function App() {
         const reelDrag = 1 + equippedReel.dragStability / 100;
 
         if (isReeling) {
-          const tensionRate = (0.022 * (fishDifficulty * 0.7)) / (rodTolerance * reelDrag);
+          // Reeling increases tension smoothly based on fish resistance
+          const tensionRate = (0.016 * (fishDifficulty * 0.6)) / (rodTolerance * reelDrag);
           nextTension += tensionRate;
         } else {
-          nextTension -= 0.024;
+          // Tension steadily relaxes when not reeling
+          nextTension -= 0.018;
         }
 
-        if (Math.random() < 0.12) {
-          nextTension += (Math.random() * 0.15 * fishDifficulty) / rodTolerance;
+        // Controlled subtle fish struggle variance (no erratic spikes)
+        if (Math.random() < 0.08) {
+          nextTension += (Math.random() * 0.05 * fishDifficulty) / rodTolerance;
         }
 
         soundEngine.updateTensionSound(nextTension);
 
+        // Snap condition: High tension sustained >= 0.98
         if (nextTension >= 0.98) {
           soundEngine.playLineSnap();
-          setFishingState('FAILED');
+          setFishingState('CANCELLED');
           setIsReeling(false);
           soundEngine.stopReelingSound();
           return 1.0;
         }
 
-        if (nextTension <= 0.04) {
+        // Slack slip condition: Tension collapses below 0.02
+        if (nextTension <= 0.02) {
           soundEngine.stopTensionSound();
           soundEngine.stopReelingSound();
-          setFishingState('FAILED');
+          setFishingState('CANCELLED');
           setIsReeling(false);
           return 0.0;
         }
@@ -676,10 +475,12 @@ export default function App() {
 
       setFishDistance((prevDist) => {
         if (!isReeling) {
-          return Math.min(22, prevDist + 0.06);
+          // Fish swims slightly away when free
+          return Math.min(22, prevDist + 0.04);
         }
 
-        const reelSpeed = 0.28 * (1 + equippedReel.reelSpeedBonus / 100);
+        // Reel speed pulls fish inward
+        const reelSpeed = 0.22 * (1 + equippedReel.reelSpeedBonus / 100);
         const nextDist = prevDist - reelSpeed;
 
         if (nextDist <= 1.0) {
@@ -739,126 +540,98 @@ export default function App() {
     setFishingState('IDLE');
   }, [clearAllFishingTimers]);
 
-  // Shop handlers
-  const handleBuyOrEquipRod = useCallback(
-    (rod: RodItem) => {
-      if (unlockedGearIds.includes(rod.id)) {
-        setEquippedRodId(rod.id);
-      } else if (coins >= rod.price) {
-        setCoins((c) => c - rod.price);
-        setUnlockedGearIds((u) => [...u, rod.id]);
-        setEquippedRodId(rod.id);
-      }
-    },
-    [coins, unlockedGearIds]
-  );
-
-  const handleBuyOrEquipReel = useCallback(
-    (reel: ReelItem) => {
-      if (unlockedGearIds.includes(reel.id)) {
-        setEquippedReelId(reel.id);
-      } else if (coins >= reel.price) {
-        setCoins((c) => c - reel.price);
-        setUnlockedGearIds((u) => [...u, reel.id]);
-        setEquippedReelId(reel.id);
-      }
-    },
-    [coins, unlockedGearIds]
-  );
-
-  const handleBuyOrEquipLine = useCallback(
-    (line: LineItem) => {
-      if (unlockedGearIds.includes(line.id)) {
-        setEquippedLineId(line.id);
-      } else if (coins >= line.price) {
-        setCoins((c) => c - line.price);
-        setUnlockedGearIds((u) => [...u, line.id]);
-        setEquippedLineId(line.id);
-      }
-    },
-    [coins, unlockedGearIds]
-  );
-
-  const handleBuyBait = useCallback(
-    (bait: BaitItem) => {
-      if (coins >= bait.price) {
-        setCoins((c) => c - bait.price);
-        setBaitInventory((prev) => ({
-          ...prev,
-          [bait.id]: (prev[bait.id] || 0) + bait.count,
-        }));
-        setEquippedBaitId(bait.id);
-      }
-    },
-    [coins]
-  );
-
-  const handleCraftSuccess = useCallback((recipe: CraftingRecipe) => {
-    if (recipe.category === 'BAIT' || recipe.category === 'LURE') {
-      setBaitInventory((prev) => ({
-        ...prev,
-        [recipe.id]: (prev[recipe.id] || 0) + recipe.resultCount,
-      }));
-    }
-  }, []);
-
-  // Environment Controls
-  const cycleWeather = useCallback(() => {
+  // Weather & Time toggles
+  const cycleWeather = () => {
     const weathers: WeatherType[] = ['SUNNY', 'CLOUDY', 'RAIN', 'HEAVY_RAIN', 'FOG'];
-    setWeather((w) => weathers[(weathers.indexOf(w) + 1) % weathers.length]);
-  }, []);
+    const idx = weathers.indexOf(weather);
+    setWeather(weathers[(idx + 1) % weathers.length]);
+  };
 
-  const cycleTimeOfDay = useCallback(() => {
+  const cycleTimeOfDay = () => {
     const times: TimeOfDay[] = ['MORNING', 'DAY', 'AFTERNOON', 'SUNSET', 'NIGHT'];
-    setTimeOfDay((t) => times[(times.indexOf(t) + 1) % times.length]);
-  }, []);
+    const idx = times.indexOf(timeOfDay);
+    setTimeOfDay(times[(idx + 1) % times.length]);
+  };
 
-  const cycleViewMode = useCallback(() => {
-    const modes: ViewMode[] = ['FISHING_DOCK', 'PLAYER_CABIN', 'UNDERWATER_SONAR'];
-    setViewMode((cur) => modes[(modes.indexOf(cur) + 1) % modes.length]);
-  }, []);
+  const toggleSound = () => {
+    setSoundEnabled((prev) => !prev);
+  };
 
-  const toggleSound = useCallback(() => {
-    const nextMute = soundEngine.toggleMute();
-    setSoundEnabled(!nextMute);
-  }, []);
-
-  // Keyboard pause listener (Esc)
+  // Keyboard accessibility
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Pause toggle: Key P
       if (e.code === 'KeyP') {
-        setIsPaused((p) => !p);
+        setIsPaused((prev) => !prev);
+        return;
+      }
+
+      if (isPaused) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (fishingState === 'IDLE' && canFish) {
+          handleStartCastCharge();
+        } else if (fishingState === 'BITE') {
+          handleHookFish();
+        } else if (fishingState === 'HOOKED' || fishingState === 'REELING') {
+          handleStartReel();
+        }
+      }
+
+      if (e.code === 'Escape') {
+        if (showCatchModal) setShowCatchModal(false);
+        if (showCollectionModal) setShowCollectionModal(false);
+        if (fishingState !== 'IDLE') handleResetToIdle();
       }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (fishingState === 'CASTING') {
+          handleReleaseCastCharge();
+        } else if (fishingState === 'REELING') {
+          handleStopReel();
+        }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [
+    isPaused,
+    fishingState,
+    canFish,
+    showCatchModal,
+    showCollectionModal,
+    handleStartCastCharge,
+    handleReleaseCastCharge,
+    handleHookFish,
+    handleStartReel,
+    handleStopReel,
+    handleResetToIdle,
+  ]);
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden select-none bg-slate-950 font-sans">
-      {/* 1. TOP ENVIRONMENT & NAVIGATION BAR */}
+    <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
+      {/* 1. TOP ENVIRONMENT & UTILITY BAR */}
       <EnvironmentControlBar
         weather={weather}
         timeOfDay={timeOfDay}
         coins={coins}
-        equippedRod={equippedRod}
-        equippedBait={equippedBait}
         soundEnabled={soundEnabled}
         language={language}
-        viewMode={viewMode}
         isPaused={isPaused}
         onTogglePause={() => setIsPaused((p) => !p)}
         onCycleWeather={cycleWeather}
         onCycleTimeOfDay={cycleTimeOfDay}
         onToggleSound={toggleSound}
         onOpenCollection={() => setShowCollectionModal(true)}
-        onOpenShop={() => setShowShopModal(true)}
-        onOpenLeaderboard={() => setShowLeaderboardModal(true)}
-        onOpenMultiplayer={() => setShowMultiplayerDrawer(true)}
-        onOpenCustomization={() => setShowCustomizationModal(true)}
-        onOpenCabin={() => setShowCabinModal(true)}
-        onOpenEcosystem={() => setShowEcosystemHUD(true)}
-        onCycleViewMode={cycleViewMode}
       />
 
       {/* 2. 3D WEBGL ENGINE */}
@@ -869,13 +642,11 @@ export default function App() {
         fishDistance={fishDistance}
         weather={weather}
         timeOfDay={timeOfDay}
-        peers={peers}
         equippedRod={equippedRod}
         customization={customization}
         cabinTheme={cabinTheme}
         dockLighting={dockLighting}
         mountedTrophies={mountedTrophies}
-        viewMode={viewMode}
         isPaused={isPaused}
         onCanFishChange={setCanFish}
         joystickInput={joystickInput}
@@ -887,8 +658,8 @@ export default function App() {
         }}
       />
 
-      {/* 3. MOBILE MOVEMENT JOYSTICK (Only visible in IDLE & Exploration) */}
-      {fishingState === 'IDLE' && viewMode === 'FISHING_DOCK' && !isPaused && (
+      {/* 3. MOBILE MOVEMENT JOYSTICK (Only visible in IDLE state) */}
+      {fishingState === 'IDLE' && !isPaused && (
         <div className="fixed bottom-6 left-6 z-20 pointer-events-auto md:hidden">
           <MobileJoystick
             onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
@@ -906,7 +677,6 @@ export default function App() {
         isReeling={isReeling}
         canFish={canFish}
         language={language}
-        isPaused={isPaused}
         onStartCastCharge={handleStartCastCharge}
         onReleaseCastCharge={handleReleaseCastCharge}
         onHookFish={handleHookFish}
@@ -915,7 +685,7 @@ export default function App() {
         onResetToIdle={handleResetToIdle}
       />
 
-      {/* 5. MODALS & DRAWERS */}
+      {/* 5. CATCH SUCCESS MODAL */}
       {showCatchModal && (
         <CatchModal
           catchRecord={lastCatchRecord}
@@ -927,6 +697,7 @@ export default function App() {
         />
       )}
 
+      {/* 6. FISH COLLECTION MODAL */}
       {showCollectionModal && (
         <FishCollectionModal
           unlockedCatches={unlockedCatches}
@@ -934,88 +705,6 @@ export default function App() {
           onClose={() => setShowCollectionModal(false)}
         />
       )}
-
-      {showShopModal && (
-        <TackleShopModal
-          coins={coins}
-          equippedRodId={equippedRodId}
-          equippedReelId={equippedReelId}
-          equippedLineId={equippedLineId}
-          equippedBaitId={equippedBaitId}
-          unlockedGearIds={unlockedGearIds}
-          baitInventory={baitInventory}
-          language={language}
-          onBuyOrEquipRod={handleBuyOrEquipRod}
-          onBuyOrEquipReel={handleBuyOrEquipReel}
-          onBuyOrEquipLine={handleBuyOrEquipLine}
-          onBuyBait={handleBuyBait}
-          onEquipBait={(bId) => setEquippedBaitId(bId)}
-          onClose={() => setShowShopModal(false)}
-        />
-      )}
-
-      {showLeaderboardModal && (
-        <LeaderboardModal
-          language={language}
-          playerName={playerName}
-          onClose={() => setShowLeaderboardModal(false)}
-        />
-      )}
-
-      <MultiplayerChatDrawer
-        isOpen={showMultiplayerDrawer}
-        playerName={playerName}
-        language={language}
-        onClose={() => setShowMultiplayerDrawer(false)}
-        onLanguageChange={(lang) => setLanguage(lang)}
-      />
-
-      {/* 6. GEAR CUSTOMIZATION MODAL */}
-      <GearCustomizationModal
-        isOpen={showCustomizationModal}
-        onClose={() => setShowCustomizationModal(false)}
-        equippedRod={equippedRod}
-        equippedReel={equippedReel}
-        equippedLine={equippedLine}
-        equippedLure={equippedLure}
-        customization={customization}
-        onUpdateCustomization={setCustomization}
-        onEquipRod={(rod: RodItem) => setEquippedRodId(rod.id)}
-        onEquipReel={(reel: ReelItem) => setEquippedReelId(reel.id)}
-        onEquipLine={(line: LineItem) => setEquippedLineId(line.id)}
-        onEquipLure={(lure: LureItem) => setEquippedLureId(lure.id)}
-      />
-
-      {/* 7. PLAYER CABIN & BASE SYSTEM MODAL */}
-      <PlayerCabinModal
-        isOpen={showCabinModal}
-        onClose={() => setShowCabinModal(false)}
-        coins={coins}
-        onUpdateCoins={setCoins}
-        catchHistory={catchHistory}
-        mountedTrophies={mountedTrophies}
-        onUpdateTrophies={setMountedTrophies}
-        cabinTheme={cabinTheme}
-        onUpdateCabinTheme={setCabinTheme}
-        dockLighting={dockLighting}
-        onUpdateDockLighting={setDockLighting}
-        craftingMaterials={craftingMaterials}
-        onUpdateCraftingMaterials={setCraftingMaterials}
-        onCraftSuccess={handleCraftSuccess}
-        onSwitchToCabinView={() => setViewMode('PLAYER_CABIN')}
-      />
-
-      {/* 8. DYNAMIC UNDERWATER ECOSYSTEM & SONAR HUD */}
-      <UnderwaterEcosystemHUD
-        isOpen={showEcosystemHUD}
-        onClose={() => setShowEcosystemHUD(false)}
-        weather={weather}
-        timeOfDay={timeOfDay}
-        viewMode={viewMode}
-        onToggleSonarView={() => {
-          setViewMode((cur) => (cur === 'UNDERWATER_SONAR' ? 'FISHING_DOCK' : 'UNDERWATER_SONAR'));
-        }}
-      />
     </main>
   );
 }

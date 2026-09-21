@@ -1,19 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { FishingState, SupportedLanguage } from '../types';
 import { LOCALIZATION } from '../data/localization';
 import { TensionGauge } from './TensionGauge';
-import { Anchor, AlertCircle, Compass, XCircle } from 'lucide-react';
+import { Compass, AlertCircle, Anchor, XCircle, RotateCcw } from 'lucide-react';
 
 interface FishingHUDProps {
   fishingState: FishingState;
   castPower: number;
   lineTension: number;
   fishDistance: number;
-  isReeling: boolean;
   canFish: boolean;
   language: SupportedLanguage;
-  isPaused: boolean;
+  isReeling: boolean;
   onStartCastCharge: () => void;
   onReleaseCastCharge: () => void;
   onHookFish: () => void;
@@ -27,10 +26,9 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
   castPower,
   lineTension,
   fishDistance,
-  isReeling,
   canFish,
   language,
-  isPaused,
+  isReeling,
   onStartCastCharge,
   onReleaseCastCharge,
   onHookFish,
@@ -39,149 +37,97 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
   onResetToIdle,
 }) => {
   const t = LOCALIZATION[language] || LOCALIZATION.en;
-  const [isChargingCast, setIsChargingCast] = useState(false);
-  const isChargingRef = useRef(false);
 
-  // Sync ref
-  useEffect(() => {
-    isChargingRef.current = isChargingCast;
-  }, [isChargingCast]);
-
-  // If state moves away from PREPARING/IDLE, clear charging state safely
-  useEffect(() => {
-    if (fishingState !== 'IDLE' && fishingState !== 'PREPARING') {
-      setIsChargingCast(false);
-      isChargingRef.current = false;
-    }
-  }, [fishingState]);
-
-  // Robust Cast Start
-  const handleStartCast = useCallback(() => {
-    if (isPaused || fishingState !== 'IDLE' || !canFish) return;
-    setIsChargingCast(true);
-    isChargingRef.current = true;
+  // Pointer event handlers to prevent mobile double-tap / ghost firing
+  const handleStartCast = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     onStartCastCharge();
-  }, [isPaused, fishingState, canFish, onStartCastCharge]);
+  };
 
-  // Robust Cast Release
-  const handleReleaseCast = useCallback(() => {
-    if (!isChargingRef.current) return;
-    setIsChargingCast(false);
-    isChargingRef.current = false;
+  const handleReleaseCast = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     onReleaseCastCharge();
-  }, [onReleaseCastCharge]);
+  };
 
-  // Keyboard controls with repeat lock and event prevention
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isPaused) return;
-      if (e.repeat) return; // Prevent key repeat spam
-
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (fishingState === 'IDLE') {
-          handleStartCast();
-        } else if (fishingState === 'BITE') {
-          onHookFish();
-        } else if (fishingState === 'FISH_STRUGGLING' || fishingState === 'REELING') {
-          onStartReel();
-        }
-      } else if (e.code === 'Escape') {
-        if (fishingState !== 'IDLE') {
-          e.preventDefault();
-          onResetToIdle();
-        }
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (isChargingRef.current) {
-          handleReleaseCast();
-        } else if (fishingState === 'REELING' || fishingState === 'FISH_STRUGGLING') {
-          onStopReel();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [
-    isPaused,
-    fishingState,
-    handleStartCast,
-    handleReleaseCast,
-    onHookFish,
-    onStartReel,
-    onStopReel,
-    onResetToIdle,
-  ]);
+  const isChargingCast = fishingState === 'CASTING';
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 sm:bottom-6 flex flex-col items-center justify-end px-3 sm:px-4 z-20">
+    <div className="fixed inset-x-0 bottom-6 sm:bottom-8 z-20 flex flex-col items-center justify-end pointer-events-none px-4">
+      {/* 1. POSITIONING HINT WHEN OFF DOCK */}
+      {!canFish && fishingState === 'IDLE' && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 px-4 py-2 bg-slate-900/90 border border-amber-500/50 backdrop-blur-md rounded-2xl shadow-xl text-amber-200 text-xs sm:text-sm font-medium flex items-center gap-2 pointer-events-auto"
+        >
+          <Compass className="w-4 h-4 text-amber-400 animate-spin" />
+          <span>Walk forward onto the dock edge to cast your line</span>
+        </motion.div>
+      )}
+
+      {/* 2. CASTING POWER METER */}
+      {isChargingCast && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="mb-3 bg-slate-900/90 backdrop-blur-md border border-cyan-500/50 rounded-2xl p-3 sm:p-4 shadow-2xl flex flex-col items-center gap-2 pointer-events-auto w-64 sm:w-80"
+        >
+          <div className="flex justify-between w-full text-xs font-bold text-slate-300">
+            <span>{t.castingPower}</span>
+            <span className="text-cyan-400 font-mono">{Math.round(castPower * 100)}%</span>
+          </div>
+
+          <div className="relative w-full h-4 sm:h-5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+            <motion.div
+              className="h-full bg-gradient-to-r from-teal-400 via-cyan-400 to-blue-500 rounded-full"
+              style={{ width: `${Math.round(castPower * 100)}%` }}
+            />
+            {/* Target sweet spot marker */}
+            <div className="absolute top-0 bottom-0 left-[65%] right-[15%] border-x border-dashed border-yellow-300/80 bg-yellow-400/10 pointer-events-none" />
+          </div>
+
+          <span className="text-[11px] text-cyan-200/90 font-medium">Release to cast into the water</span>
+        </motion.div>
+      )}
+
+      {/* 3. CONTEXTUAL FISHING CONTROLS */}
       <AnimatePresence mode="wait">
-        {/* 1. IDLE / PREPARING: CAST BUTTON & POWER METER */}
-        {(fishingState === 'IDLE' || fishingState === 'PREPARING') && (
+        {/* STATE: IDLE or CASTING */}
+        {(fishingState === 'IDLE' || fishingState === 'CASTING') && canFish && (
           <motion.div
-            key="idle-hud"
+            key="cast-button-container"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 15 }}
-            className="pointer-events-auto flex flex-col items-center gap-2.5 max-w-xs sm:max-w-md w-full"
+            className="pointer-events-auto"
           >
-            {/* Cast Power Meter while charging */}
-            {isChargingCast && (
-              <div className="w-56 sm:w-64 bg-slate-900/90 border border-slate-700/80 p-2 rounded-xl backdrop-blur-md shadow-xl flex flex-col gap-1 text-center">
-                <div className="flex justify-between text-xs text-cyan-300 font-semibold">
-                  <span>Cast Power</span>
-                  <span>{Math.round(castPower * 100)}%</span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
-                  <div
-                    className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 rounded-full transition-all duration-75"
-                    style={{ width: `${castPower * 100}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* If player is too far from water/dock */}
-            {!canFish ? (
-              <div className="px-4 py-2 bg-slate-900/90 border border-amber-500/50 rounded-xl backdrop-blur-md shadow-lg flex items-center gap-2 text-amber-200 text-xs sm:text-sm font-medium">
-                <Compass className="w-4 h-4 text-amber-400 animate-spin" />
-                <span>Move closer to the dock or lake water to cast.</span>
-              </div>
-            ) : (
-              <button
-                id="btn-cast-rod"
-                onPointerDown={handleStartCast}
-                onPointerUp={handleReleaseCast}
-                onPointerCancel={handleReleaseCast}
-                className="w-full sm:w-auto px-7 py-3 sm:py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 active:scale-95 text-white font-bold text-base sm:text-lg rounded-2xl shadow-xl shadow-cyan-950/50 border border-cyan-400/40 flex items-center justify-center gap-2.5 transition-transform cursor-pointer touch-none"
-              >
-                <Compass className="w-5 h-5 animate-pulse text-cyan-200" />
-                <span>{isChargingCast ? t.casting : t.holdToAim}</span>
-                <span className="hidden sm:inline-block text-[11px] bg-black/30 px-2 py-0.5 rounded-md text-cyan-200 font-mono">
-                  [SPACE]
-                </span>
-              </button>
-            )}
+            <button
+              id="btn-cast-rod"
+              onPointerDown={handleStartCast}
+              onPointerUp={handleReleaseCast}
+              onPointerCancel={handleReleaseCast}
+              className="px-8 py-3.5 sm:py-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 active:scale-95 text-white font-bold text-base sm:text-lg rounded-2xl shadow-xl shadow-cyan-950/50 border border-cyan-400/40 flex items-center justify-center gap-2.5 transition-transform cursor-pointer touch-none select-none"
+            >
+              <Compass className="w-5 h-5 animate-pulse text-cyan-200" />
+              <span>{isChargingCast ? t.casting : t.holdToAim}</span>
+              <span className="hidden sm:inline-block text-[11px] bg-black/30 px-2 py-0.5 rounded-md text-cyan-200 font-mono">
+                [SPACE]
+              </span>
+            </button>
           </motion.div>
         )}
 
-        {/* 2. BOBBER ACTIVE / FISH APPROACHING */}
-        {(fishingState === 'BOBBER_ACTIVE' || fishingState === 'FISH_APPROACHING') && (
+        {/* STATE: WAITING */}
+        {fishingState === 'WAITING' && (
           <motion.div
-            key="bobber-hud"
+            key="waiting-hud"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="pointer-events-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/80 px-5 py-2.5 rounded-2xl shadow-xl flex items-center gap-3"
+            className="pointer-events-auto bg-slate-900/90 backdrop-blur-md border border-slate-700/80 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3.5"
           >
             <div className="relative flex items-center justify-center w-7 h-7">
               <span className="absolute w-full h-full rounded-full bg-cyan-400/30 animate-ping" />
@@ -189,12 +135,12 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
             </div>
             <div className="flex flex-col">
               <span className="text-xs sm:text-sm font-semibold text-slate-100">
-                {fishingState === 'FISH_APPROACHING' ? t.fishApproaching : t.watchingBobber}
+                {t.watchingBobber}
               </span>
-              <span className="text-[10px] text-cyan-300/80">Keep eyes on the water ripples...</span>
+              <span className="text-[11px] text-cyan-300/80">Watching water ripples...</span>
             </div>
 
-            {/* Quick Cancel Button */}
+            {/* Cancel Cast Button */}
             <button
               id="btn-cancel-fishing"
               onClick={onResetToIdle}
@@ -206,7 +152,7 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* 3. BITE! STRIKE ALERT */}
+        {/* STATE: BITE */}
         {fishingState === 'BITE' && (
           <motion.div
             key="bite-hud"
@@ -218,7 +164,7 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
             <button
               id="btn-hook-fish"
               onClick={onHookFish}
-              className="px-8 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 hover:from-rose-500 hover:to-amber-400 active:scale-95 text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-2xl shadow-red-900/80 border-2 border-amber-300 flex items-center gap-2.5 cursor-pointer animate-bounce touch-none"
+              className="px-8 sm:px-10 py-3.5 sm:py-4 bg-gradient-to-r from-rose-600 via-red-600 to-amber-500 hover:from-rose-500 hover:to-amber-400 active:scale-95 text-white font-extrabold text-lg sm:text-xl rounded-2xl shadow-2xl shadow-red-900/80 border-2 border-amber-300 flex items-center gap-2.5 cursor-pointer animate-bounce touch-none select-none"
             >
               <AlertCircle className="w-6 h-6 text-yellow-200 animate-spin" />
               <span>{t.biteAlert}</span>
@@ -229,8 +175,8 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* 4. HOOKED / STRUGGLING / REELING */}
-        {(fishingState === 'HOOKED' || fishingState === 'FISH_STRUGGLING' || fishingState === 'REELING') && (
+        {/* STATE: HOOKED or REELING */}
+        {(fishingState === 'HOOKED' || fishingState === 'REELING') && (
           <motion.div
             key="reeling-hud"
             initial={{ opacity: 0, y: 20 }}
@@ -238,11 +184,11 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
             exit={{ opacity: 0, y: 20 }}
             className="pointer-events-auto flex flex-col items-center gap-2.5 w-full max-w-sm sm:max-w-md"
           >
-            {/* Tension physics gauge */}
+            {/* Tension gauge physics */}
             <TensionGauge tension={lineTension} isReeling={isReeling} fishDistance={fishDistance} />
 
             <div className="flex items-center gap-2 w-full">
-              {/* Reel Control Button */}
+              {/* Reel Button */}
               <button
                 id="btn-reel-action"
                 onPointerDown={onStartReel}
@@ -274,8 +220,28 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* 5. FAILED RECOVERY */}
-        {fishingState === 'FAILED' && (
+        {/* STATE: CAUGHT (Catch modal handles details, HUD shows quick reset if needed) */}
+        {fishingState === 'CAUGHT' && (
+          <motion.div
+            key="caught-hud"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="pointer-events-auto bg-slate-900/90 border border-emerald-500/60 p-3 sm:p-4 rounded-2xl shadow-2xl flex flex-col items-center gap-2 text-center"
+          >
+            <div className="text-emerald-400 font-bold text-sm">Fish Caught!</div>
+            <button
+              id="btn-caught-continue"
+              onClick={onResetToIdle}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl cursor-pointer"
+            >
+              Cast Again
+            </button>
+          </motion.div>
+        )}
+
+        {/* STATE: CANCELLED or FAILED */}
+        {fishingState === 'CANCELLED' && (
           <motion.div
             key="failed-hud"
             initial={{ opacity: 0, scale: 0.9 }}
@@ -289,9 +255,10 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
             <button
               id="btn-retry-fish"
               onClick={onResetToIdle}
-              className="px-5 py-1.5 sm:py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-600 cursor-pointer"
+              className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-600 flex items-center gap-1.5 cursor-pointer"
             >
-              Reset Rod
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Rod</span>
             </button>
           </motion.div>
         )}
