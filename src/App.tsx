@@ -31,7 +31,8 @@ import { INITIAL_DAILY_MISSIONS, updateMissionsOnCatch } from './data/dailyMissi
 import { soundEngine } from './services/soundEngine';
 import { ThreeCanvas } from './components/ThreeCanvas';
 import { FishingHUD } from './components/FishingHUD';
-import { MobileJoystick } from './components/MobileJoystick';
+import { MobileControls } from './components/MobileControls';
+import { LoadingScreen } from './components/LoadingScreen';
 import { CatchModal } from './components/CatchModal';
 import { FishCollectionModal } from './components/FishCollectionModal';
 import { EnvironmentControlBar } from './components/EnvironmentControlBar';
@@ -365,6 +366,13 @@ export default function App() {
     }
   }, [weather, timeOfDay, soundEnabled, isPaused]);
 
+  // --- ENGINE LOADING PROGRESS ARCHITECTURE ---
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStatus, setLoadingStatus] = useState('BOOTING 3D ENGINE...');
+  const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [isLoadingComplete, setIsLoadingComplete] = useState(false);
+  const cameraRotateRef = useRef<((deltaYaw: number, deltaPitch: number) => void) | null>(null);
+
   // Clean session disposal function
   const cleanupFishingSession = useCallback((reason?: string) => {
     console.log(`[FISHING] Cleanup session #${activeSessionIdRef.current}: ${reason || 'routine'}`);
@@ -403,7 +411,14 @@ export default function App() {
     isHookingRef.current = false;
     isCastingRef.current = false;
     catchProcessedRef.current = false;
+
+    // Reset rod/line state variables to defaults
+    setLineTension(0.3);
+    setCastPower(0);
+    setFishDistance(14);
     setIsReeling(false);
+    setActiveFish(null);
+
     soundEngine.stopTensionSound();
     soundEngine.stopReelingSound();
   }, []);
@@ -535,10 +550,11 @@ export default function App() {
       biteWindowTimerRef.current = window.setTimeout(() => {
         if (activeSessionIdRef.current !== session) return;
         soundEngine.playHookEscape();
+        cleanupFishingSession('bite reaction window expired');
         transitionFishingState('CANCELLED', session, 'bite reaction window expired');
       }, reactionWindow);
     },
-    [transitionFishingState]
+    [transitionFishingState, cleanupFishingSession]
   );
 
   const scheduleFishApproach = useCallback(
@@ -771,18 +787,15 @@ export default function App() {
         // Snap condition: High tension sustained >= 0.98
         if (nextTension >= 0.98) {
           soundEngine.playLineSnap();
+          cleanupFishingSession('line snapped under tension');
           transitionFishingState('CANCELLED', session, 'line snapped under tension');
-          setIsReeling(false);
-          soundEngine.stopReelingSound();
           return 1.0;
         }
 
         // Slack slip condition: Tension collapses below 0.02
         if (nextTension <= 0.02) {
-          soundEngine.stopTensionSound();
-          soundEngine.stopReelingSound();
+          cleanupFishingSession('line tension collapsed');
           transitionFishingState('CANCELLED', session, 'line tension collapsed');
-          setIsReeling(false);
           return 0.0;
         }
 
@@ -851,6 +864,13 @@ export default function App() {
     setCastPower(0);
     setLineTension(0.3);
   }, [lastCatchRecord, cleanupFishingSession]);
+
+  // Emergency recovery for fishing system
+  const resetFishingSystem = useCallback(() => {
+    cleanupFishingSession('emergency system reset');
+    activeSessionIdRef.current = ++sessionIdCounterRef.current;
+    setFishingState('IDLE');
+  }, [cleanupFishingSession]);
 
   // Weather & Time toggles
   const cycleWeather = () => {
@@ -974,7 +994,36 @@ export default function App() {
         onOpenCabin={() => setShowCabinModal(true)}
       />
 
-      {/* 2. 3D WEBGL ENGINE */}
+      {/* 1. LOADING SCREEN (BLACK + WHITE MAXIMALISM) */}
+      <LoadingScreen
+        progress={loadingProgress}
+        statusText={loadingStatus}
+        error={loadingError}
+        isComplete={isLoadingComplete}
+        onRetry={() => window.location.reload()}
+      />
+
+      {/* 2. TOP HUD & ENVIRONMENT CONTROLS */}
+      <EnvironmentControlBar
+        weather={weather}
+        timeOfDay={timeOfDay}
+        coins={coins}
+        soundEnabled={soundEnabled}
+        language={language}
+        isPaused={isPaused}
+        dailyMissions={dailyMissions}
+        onOpenDailyMissions={() => setShowDailyMissionsModal(true)}
+        onTogglePause={() => setIsPaused((p) => !p)}
+        onCycleWeather={cycleWeather}
+        onCycleTimeOfDay={cycleTimeOfDay}
+        onToggleSound={toggleSound}
+        onOpenCollection={() => setShowCollectionModal(true)}
+        onOpenShop={() => setShowTackleShop(true)}
+        onOpenCustomization={() => setShowCustomizationModal(true)}
+        onOpenCabin={() => setShowCabinModal(true)}
+      />
+
+      {/* 3. 3D WEBGL ENGINE WITH AUTHORITATIVE CAMERA CONTROLLER */}
       <ThreeCanvas
         fishingState={fishingState}
         castPower={castPower}
@@ -990,6 +1039,13 @@ export default function App() {
         isPaused={isPaused}
         onCanFishChange={setCanFish}
         joystickInput={joystickInput}
+        onLoadingProgress={(prog, step) => {
+          setLoadingProgress(prog);
+          setLoadingStatus(step);
+        }}
+        onLoadingError={(err) => setLoadingError(err)}
+        onLoadingComplete={() => setIsLoadingComplete(true)}
+        cameraRotateRef={cameraRotateRef}
         onCanvasClick={() => {
           soundEngine.resume();
           if (fishingState === 'BITE') {
@@ -998,17 +1054,27 @@ export default function App() {
         }}
       />
 
-      {/* 3. MOBILE MOVEMENT JOYSTICK (Only visible in IDLE state) */}
-      {fishingState === 'IDLE' && !isPaused && !isAnyModalOpen && (
-        <div className="fixed bottom-6 left-6 z-20 pointer-events-auto md:hidden">
-          <MobileJoystick
-            onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
-            disabled={isPaused}
-          />
-        </div>
-      )}
+      {/* 4. DEDICATED MOBILE LANDSCAPE CONTROLS & CAMERA TOUCH ZONE */}
+      <MobileControls
+        fishingState={fishingState}
+        canFish={canFish}
+        isPaused={isPaused}
+        disabled={!isLoadingComplete || isAnyModalOpen}
+        onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
+        onCameraRotate={(deltaYaw, deltaPitch) => {
+          if (cameraRotateRef.current) {
+            cameraRotateRef.current(deltaYaw, deltaPitch);
+          }
+        }}
+        onStartCastCharge={handleStartCastCharge}
+        onReleaseCastCharge={handleReleaseCastCharge}
+        onHookFish={handleHookFish}
+        onStartReel={handleStartReel}
+        onStopReel={handleStopReel}
+        onResetToIdle={handleResetToIdle}
+      />
 
-      {/* 4. FISHING ACTION CONTROLS & HUD */}
+      {/* 5. FISHING ACTION CONTROLS & HUD */}
       <FishingHUD
         fishingState={fishingState}
         castPower={castPower}

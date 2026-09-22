@@ -465,5 +465,20 @@ export class StylizedPlayerCharacter {
     this.group.updateMatrixWorld(true);
     this.rodTipMarker.getWorldPosition(this.rodTipPosition);
   }
+
+  /**
+   * Authoritative reset returning rod, arms, and torso immediately to IDLE stance.
+   */
+  public resetToIdle() {
+    this.rightArmGroup.rotation.set(-0.7, -0.15, 0.22);
+    this.leftArmGroup.rotation.set(-0.4, 0.2, -0.15);
+    this.rodGroup.rotation.set(-0.55, 0.15, 0);
+    this.rodMidGroup.rotation.set(0.04, 0, 0);
+    this.rodTipGroup.rotation.set(0.06, 0, 0);
+    this.torsoGroup.rotation.set(0, 0, 0);
+    this.headGroup.rotation.set(0.08, 0, 0);
+    this.group.updateMatrixWorld(true);
+    this.rodTipMarker.getWorldPosition(this.rodTipPosition);
+  }
 }
 
