@@ -527,6 +527,31 @@ class SoundEngine {
     osc.stop(now + 0.38);
   }
 
+  public playCoins() {
+    this.playCoinDing();
+  }
+
+  public playFanfare() {
+    this.playCatchSuccess(true);
+  }
+
+  public playCancel() {
+    if (!this.ctx || !this.sfxGain || this.isMuted) return;
+    this.resume();
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(240, now);
+    osc.frequency.setValueAtTime(180, now + 0.08);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  }
+
   public playWorkbenchCraft() {
     if (!this.ctx || !this.sfxGain || this.isMuted) return;
     this.resume();

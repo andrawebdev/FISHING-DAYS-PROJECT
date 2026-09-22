@@ -18,6 +18,9 @@ import {
   VolumeX,
   Coins,
   BookOpen,
+  ShoppingBag,
+  Palette,
+  Home,
   Pause,
   Play,
 } from 'lucide-react';
@@ -34,6 +37,9 @@ interface EnvironmentControlBarProps {
   onCycleTimeOfDay: () => void;
   onToggleSound: () => void;
   onOpenCollection: () => void;
+  onOpenShop?: () => void;
+  onOpenCustomization?: () => void;
+  onOpenCabin?: () => void;
 }
 
 export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
@@ -48,6 +54,9 @@ export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
   onCycleTimeOfDay,
   onToggleSound,
   onOpenCollection,
+  onOpenShop,
+  onOpenCustomization,
+  onOpenCabin,
 }) => {
   const t = LOCALIZATION[language] || LOCALIZATION.en;
 
@@ -155,23 +164,62 @@ export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
         </button>
       </div>
 
-      {/* Right: Coins and Functional Catch Catalog */}
+      {/* Right: Coins, Shop, Gear, Cabin, and Collection */}
       <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto shrink-0">
         {/* Money / Coins Counter */}
-        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 border border-amber-500/40 backdrop-blur-md rounded-xl text-amber-300 font-mono font-bold text-xs shadow-md">
+        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900/90 border border-amber-500/40 backdrop-blur-md rounded-xl text-amber-300 font-mono font-bold text-xs shadow-md">
           <Coins className="w-3.5 h-3.5" />
           <span>${coins}</span>
         </div>
+
+        {/* Tackle Shop Button */}
+        {onOpenShop && (
+          <button
+            id="btn-open-tackle-shop"
+            onClick={onOpenShop}
+            title={t.gearShop || 'Tackle Shop'}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-800 border border-amber-500/30 hover:border-amber-400/60 backdrop-blur-md rounded-xl text-slate-200 text-xs font-semibold transition cursor-pointer shadow-sm"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">{t.gearShop || 'Shop'}</span>
+          </button>
+        )}
+
+        {/* Gear Customization Button */}
+        {onOpenCustomization && (
+          <button
+            id="btn-open-gear-customization"
+            onClick={onOpenCustomization}
+            title="Customize Rod & Gear"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-800 border border-purple-500/30 hover:border-purple-400/60 backdrop-blur-md rounded-xl text-slate-200 text-xs font-semibold transition cursor-pointer shadow-sm"
+          >
+            <Palette className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden lg:inline">Gear</span>
+          </button>
+        )}
+
+        {/* Player Cabin Button */}
+        {onOpenCabin && (
+          <button
+            id="btn-open-player-cabin"
+            onClick={onOpenCabin}
+            title="Player Cabin & Trophies"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-800 border border-emerald-500/30 hover:border-emerald-400/60 backdrop-blur-md rounded-xl text-slate-200 text-xs font-semibold transition cursor-pointer shadow-sm"
+          >
+            <Home className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden lg:inline">Cabin</span>
+          </button>
+        )}
 
         {/* Fish Collection / Catches Catalog */}
         <button
           id="btn-open-collection"
           onClick={onOpenCollection}
           title={t.collection}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 backdrop-blur-md rounded-xl text-slate-200 text-xs font-semibold transition cursor-pointer shadow-sm"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-900/85 hover:bg-slate-800 border border-slate-700/80 backdrop-blur-md rounded-xl text-slate-200 text-xs font-semibold transition cursor-pointer shadow-sm"
         >
           <BookOpen className="w-3.5 h-3.5 text-teal-400" />
-          <span>{t.collection}</span>
+          <span className="hidden sm:inline">{t.collection}</span>
         </button>
       </div>
     </header>

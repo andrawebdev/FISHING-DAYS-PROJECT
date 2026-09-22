@@ -17,7 +17,15 @@ import {
   MountedTrophy,
 } from './types';
 import { FISH_DATABASE } from './data/fishDatabase';
-import { RODS, REELS, LINES, BAITS, LURES } from './data/gearDatabase';
+import {
+  RODS,
+  REELS,
+  LINES,
+  BAITS,
+  LURES,
+  DEFAULT_GEAR_CUSTOMIZATION,
+  INITIAL_CRAFTING_MATERIALS,
+} from './data/gearDatabase';
 import { soundEngine } from './services/soundEngine';
 import { ThreeCanvas } from './components/ThreeCanvas';
 import { FishingHUD } from './components/FishingHUD';
@@ -25,6 +33,9 @@ import { MobileJoystick } from './components/MobileJoystick';
 import { CatchModal } from './components/CatchModal';
 import { FishCollectionModal } from './components/FishCollectionModal';
 import { EnvironmentControlBar } from './components/EnvironmentControlBar';
+import { TackleShopModal } from './components/TackleShopModal';
+import { GearCustomizationModal } from './components/GearCustomizationModal';
+import { PlayerCabinModal } from './components/PlayerCabinModal';
 
 export default function App() {
   // --- PLAYER PROGRESSION & INVENTORY STATE ---
@@ -50,26 +61,83 @@ export default function App() {
   const [isPaused, setIsPaused] = useState<boolean>(false);
 
   // Equipped Gear
-  const [equippedRodId] = useState<string>('bamboo_starter');
-  const [equippedReelId] = useState<string>('basic_reel');
-  const [equippedLineId] = useState<string>('mono_starter');
-  const [equippedBaitId] = useState<string>('bread_crumbs');
+  const [equippedRodId, setEquippedRodId] = useState<string>(() => {
+    return localStorage.getItem('fishing_days_rod') || 'bamboo_starter';
+  });
+  const [equippedReelId, setEquippedReelId] = useState<string>(() => {
+    return localStorage.getItem('fishing_days_reel') || 'basic_reel';
+  });
+  const [equippedLineId, setEquippedLineId] = useState<string>(() => {
+    return localStorage.getItem('fishing_days_line') || 'mono_starter';
+  });
+  const [equippedBaitId, setEquippedBaitId] = useState<string>(() => {
+    return localStorage.getItem('fishing_days_bait') || 'bread_crumbs';
+  });
+  const [equippedLureId, setEquippedLureId] = useState<string>(() => {
+    return localStorage.getItem('fishing_days_lure') || 'surface_popper';
+  });
+
+  const [unlockedGearIds, setUnlockedGearIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_unlocked_gear');
+      return saved ? JSON.parse(saved) : ['bamboo_starter', 'basic_reel', 'mono_starter'];
+    } catch {
+      return ['bamboo_starter', 'basic_reel', 'mono_starter'];
+    }
+  });
+
+  const [baitInventory, setBaitInventory] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_bait_inventory');
+      return saved ? JSON.parse(saved) : { bread_crumbs: 15, live_worms: 10, sweet_corn: 8 };
+    } catch {
+      return { bread_crumbs: 15, live_worms: 10, sweet_corn: 8 };
+    }
+  });
 
   // Gear Customization State
-  const [customization] = useState<GearCustomization>(() => ({
-    rodColor: '#a16207',
-    rodPattern: 'SOLID',
-    handleGrip: 'NATURAL_CORK',
-    guideRingColor: '#eab308',
-    reelMetalTint: 'SILVER',
-    lineTint: 'CLEAR',
-    bobberStyle: 'CLASSIC_SPHERE',
-  }));
+  const [customization, setCustomization] = useState<GearCustomization>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_customization');
+      return saved ? JSON.parse(saved) : DEFAULT_GEAR_CUSTOMIZATION;
+    } catch {
+      return DEFAULT_GEAR_CUSTOMIZATION;
+    }
+  });
 
   // Player Cabin & Base State
-  const [cabinTheme] = useState<CabinTheme>('RUSTIC_CEDAR');
-  const [dockLighting] = useState<DockLighting>('EDISON_BULBS');
-  const [mountedTrophies] = useState<MountedTrophy[]>([]);
+  const [cabinTheme, setCabinTheme] = useState<CabinTheme>(() => {
+    try {
+      return (localStorage.getItem('fishing_days_cabin_theme') as CabinTheme) || 'RUSTIC_CEDAR';
+    } catch {
+      return 'RUSTIC_CEDAR';
+    }
+  });
+  const [dockLighting, setDockLighting] = useState<DockLighting>(() => {
+    try {
+      return (localStorage.getItem('fishing_days_dock_lighting') as DockLighting) || 'EDISON_BULBS';
+    } catch {
+      return 'EDISON_BULBS';
+    }
+  });
+  const [mountedTrophies, setMountedTrophies] = useState<MountedTrophy[]>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_trophies');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Crafting Materials
+  const [craftingMaterials, setCraftingMaterials] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_materials');
+      return saved ? JSON.parse(saved) : INITIAL_CRAFTING_MATERIALS;
+    } catch {
+      return INITIAL_CRAFTING_MATERIALS;
+    }
+  });
 
   // Catch history
   const [catchHistory, setCatchHistory] = useState<CatchRecord[]>(() => {
@@ -91,6 +159,13 @@ export default function App() {
     }
   });
 
+  // UI Modals
+  const [showCatchModal, setShowCatchModal] = useState<boolean>(false);
+  const [showCollectionModal, setShowCollectionModal] = useState<boolean>(false);
+  const [showTackleShop, setShowTackleShop] = useState<boolean>(false);
+  const [showCustomizationModal, setShowCustomizationModal] = useState<boolean>(false);
+  const [showCabinModal, setShowCabinModal] = useState<boolean>(false);
+
   // --- ENVIRONMENT & ATMOSPHERE ---
   const [weather, setWeather] = useState<WeatherType>('SUNNY');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('DAY');
@@ -109,10 +184,6 @@ export default function App() {
   const [lastCatchRecord, setLastCatchRecord] = useState<CatchRecord | null>(null);
   const [isNewRecordCatch, setIsNewRecordCatch] = useState<boolean>(false);
 
-  // UI Modals
-  const [showCatchModal, setShowCatchModal] = useState<boolean>(false);
-  const [showCollectionModal, setShowCollectionModal] = useState<boolean>(false);
-
   // Strict Timer References to prevent memory leaks and orphaned intervals
   const castChargeTimerRef = useRef<number | null>(null);
   const biteTimeoutRef = useRef<number | null>(null);
@@ -130,6 +201,7 @@ export default function App() {
   const equippedReel = REELS.find((r) => r.id === equippedReelId) || REELS[0];
   const equippedLine = LINES.find((l) => l.id === equippedLineId) || LINES[0];
   const equippedBait = BAITS.find((b) => b.id === equippedBaitId) || BAITS[0];
+  const equippedLure = LURES.find((l) => l.id === equippedLureId) || LURES[0];
 
   // Local persistence sync
   useEffect(() => {
@@ -155,6 +227,93 @@ export default function App() {
       localStorage.setItem('fishing_days_catch_history', JSON.stringify(catchHistory));
     } catch {}
   }, [catchHistory]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_unlocked_gear', JSON.stringify(unlockedGearIds));
+    } catch {}
+  }, [unlockedGearIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_bait_inventory', JSON.stringify(baitInventory));
+    } catch {}
+  }, [baitInventory]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_customization', JSON.stringify(customization));
+    } catch {}
+  }, [customization]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_trophies', JSON.stringify(mountedTrophies));
+    } catch {}
+  }, [mountedTrophies]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_materials', JSON.stringify(craftingMaterials));
+    } catch {}
+  }, [craftingMaterials]);
+
+  // Gear & Shop Action Handlers
+  const handleBuyOrEquipRod = (rod: RodItem) => {
+    if (!unlockedGearIds.includes(rod.id)) {
+      if (coins < rod.price) {
+        soundEngine.playCancel();
+        return;
+      }
+      setCoins((c) => c - rod.price);
+      setUnlockedGearIds((prev) => [...prev, rod.id]);
+    }
+    setEquippedRodId(rod.id);
+    localStorage.setItem('fishing_days_rod', rod.id);
+  };
+
+  const handleBuyOrEquipReel = (reel: ReelItem) => {
+    if (!unlockedGearIds.includes(reel.id)) {
+      if (coins < reel.price) {
+        soundEngine.playCancel();
+        return;
+      }
+      setCoins((c) => c - reel.price);
+      setUnlockedGearIds((prev) => [...prev, reel.id]);
+    }
+    setEquippedReelId(reel.id);
+    localStorage.setItem('fishing_days_reel', reel.id);
+  };
+
+  const handleBuyOrEquipLine = (line: LineItem) => {
+    if (!unlockedGearIds.includes(line.id)) {
+      if (coins < line.price) {
+        soundEngine.playCancel();
+        return;
+      }
+      setCoins((c) => c - line.price);
+      setUnlockedGearIds((prev) => [...prev, line.id]);
+    }
+    setEquippedLineId(line.id);
+    localStorage.setItem('fishing_days_line', line.id);
+  };
+
+  const handleBuyBait = (bait: BaitItem) => {
+    if (coins < bait.price) {
+      soundEngine.playCancel();
+      return;
+    }
+    setCoins((c) => c - bait.price);
+    setBaitInventory((prev) => ({
+      ...prev,
+      [bait.id]: (prev[bait.id] || 0) + bait.count,
+    }));
+  };
+
+  const handleEquipBait = (baitId: string) => {
+    setEquippedBaitId(baitId);
+    localStorage.setItem('fishing_days_bait', baitId);
+  };
 
   // Weather & Atmosphere Sounds
   useEffect(() => {
@@ -503,6 +662,7 @@ export default function App() {
     if (lastCatchRecord) {
       setCoins((prev) => prev + lastCatchRecord.value);
       soundEngine.playCoinDing();
+      setCatchHistory((prev) => [lastCatchRecord, ...prev]);
 
       setUnlockedCatches((prev) => {
         const cur = prev[lastCatchRecord.speciesId];
@@ -519,6 +679,12 @@ export default function App() {
 
   const handleKeepCatch = useCallback(() => {
     if (lastCatchRecord) {
+      setCatchHistory((prev) => [lastCatchRecord, ...prev]);
+      setCraftingMaterials((prev) => ({
+        ...prev,
+        fish_scales: (prev.fish_scales || 0) + 1,
+        polished_pebble: (prev.polished_pebble || 0) + (Math.random() < 0.5 ? 1 : 0),
+      }));
       setUnlockedCatches((prev) => {
         const cur = prev[lastCatchRecord.speciesId];
         if (!cur || lastCatchRecord.weight > cur.weight) {
@@ -557,6 +723,14 @@ export default function App() {
     setSoundEnabled((prev) => !prev);
   };
 
+  // Check if any modal is currently open
+  const isAnyModalOpen =
+    showCatchModal ||
+    showCollectionModal ||
+    showTackleShop ||
+    showCustomizationModal ||
+    showCabinModal;
+
   // Keyboard accessibility
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -568,6 +742,19 @@ export default function App() {
 
       if (isPaused) return;
 
+      if (e.code === 'Escape') {
+        if (showCatchModal) setShowCatchModal(false);
+        if (showCollectionModal) setShowCollectionModal(false);
+        if (showTackleShop) setShowTackleShop(false);
+        if (showCustomizationModal) setShowCustomizationModal(false);
+        if (showCabinModal) setShowCabinModal(false);
+        if (fishingState !== 'IDLE') handleResetToIdle();
+        return;
+      }
+
+      // Do not process fishing inputs if modal is open
+      if (isAnyModalOpen) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         if (fishingState === 'IDLE' && canFish) {
@@ -578,15 +765,11 @@ export default function App() {
           handleStartReel();
         }
       }
-
-      if (e.code === 'Escape') {
-        if (showCatchModal) setShowCatchModal(false);
-        if (showCollectionModal) setShowCollectionModal(false);
-        if (fishingState !== 'IDLE') handleResetToIdle();
-      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      if (isAnyModalOpen) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         if (fishingState === 'CASTING') {
@@ -605,10 +788,14 @@ export default function App() {
     };
   }, [
     isPaused,
+    isAnyModalOpen,
     fishingState,
     canFish,
     showCatchModal,
     showCollectionModal,
+    showTackleShop,
+    showCustomizationModal,
+    showCabinModal,
     handleStartCastCharge,
     handleReleaseCastCharge,
     handleHookFish,
@@ -632,6 +819,9 @@ export default function App() {
         onCycleTimeOfDay={cycleTimeOfDay}
         onToggleSound={toggleSound}
         onOpenCollection={() => setShowCollectionModal(true)}
+        onOpenShop={() => setShowTackleShop(true)}
+        onOpenCustomization={() => setShowCustomizationModal(true)}
+        onOpenCabin={() => setShowCabinModal(true)}
       />
 
       {/* 2. 3D WEBGL ENGINE */}
@@ -659,7 +849,7 @@ export default function App() {
       />
 
       {/* 3. MOBILE MOVEMENT JOYSTICK (Only visible in IDLE state) */}
-      {fishingState === 'IDLE' && !isPaused && (
+      {fishingState === 'IDLE' && !isPaused && !isAnyModalOpen && (
         <div className="fixed bottom-6 left-6 z-20 pointer-events-auto md:hidden">
           <MobileJoystick
             onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
@@ -703,6 +893,81 @@ export default function App() {
           unlockedCatches={unlockedCatches}
           language={language}
           onClose={() => setShowCollectionModal(false)}
+        />
+      )}
+
+      {/* 7. TACKLE SHOP MODAL */}
+      {showTackleShop && (
+        <TackleShopModal
+          coins={coins}
+          equippedRodId={equippedRodId}
+          equippedReelId={equippedReelId}
+          equippedLineId={equippedLineId}
+          equippedBaitId={equippedBaitId}
+          unlockedGearIds={unlockedGearIds}
+          baitInventory={baitInventory}
+          language={language}
+          onBuyOrEquipRod={handleBuyOrEquipRod}
+          onBuyOrEquipReel={handleBuyOrEquipReel}
+          onBuyOrEquipLine={handleBuyOrEquipLine}
+          onBuyBait={handleBuyBait}
+          onEquipBait={handleEquipBait}
+          onClose={() => setShowTackleShop(false)}
+        />
+      )}
+
+      {/* 8. GEAR CUSTOMIZATION MODAL */}
+      {showCustomizationModal && (
+        <GearCustomizationModal
+          isOpen={showCustomizationModal}
+          onClose={() => setShowCustomizationModal(false)}
+          equippedRod={equippedRod}
+          equippedReel={equippedReel}
+          equippedLine={equippedLine}
+          equippedLure={equippedLure}
+          customization={customization}
+          onUpdateCustomization={(c) => setCustomization(c)}
+          onEquipRod={handleBuyOrEquipRod}
+          onEquipReel={handleBuyOrEquipReel}
+          onEquipLine={handleBuyOrEquipLine}
+          onEquipLure={(lu) => {
+            setEquippedLureId(lu.id);
+            localStorage.setItem('fishing_days_lure', lu.id);
+          }}
+        />
+      )}
+
+      {/* 9. PLAYER CABIN & TROPHIES MODAL */}
+      {showCabinModal && (
+        <PlayerCabinModal
+          isOpen={showCabinModal}
+          onClose={() => setShowCabinModal(false)}
+          coins={coins}
+          onUpdateCoins={setCoins}
+          catchHistory={catchHistory}
+          mountedTrophies={mountedTrophies}
+          onUpdateTrophies={setMountedTrophies}
+          cabinTheme={cabinTheme}
+          onUpdateCabinTheme={(t) => {
+            setCabinTheme(t);
+            localStorage.setItem('fishing_days_cabin_theme', t);
+          }}
+          dockLighting={dockLighting}
+          onUpdateDockLighting={(l) => {
+            setDockLighting(l);
+            localStorage.setItem('fishing_days_dock_lighting', l);
+          }}
+          craftingMaterials={craftingMaterials}
+          onUpdateCraftingMaterials={setCraftingMaterials}
+          onCraftSuccess={(recipe) => {
+            soundEngine.playCoinDing();
+            if (recipe.resultType === 'COINS' && recipe.resultCount) {
+              setCoins((c) => c + recipe.resultCount);
+            }
+          }}
+          onSwitchToCabinView={() => {
+            setShowCabinModal(false);
+          }}
         />
       )}
     </main>
