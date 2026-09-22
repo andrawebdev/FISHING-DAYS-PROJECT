@@ -10,7 +10,7 @@ import {
   DockLighting,
   MountedTrophy,
 } from '../types';
-import { createStylizedTerrain } from './world/Terrain';
+import { createStylizedTerrain, getTerrainHeight } from './world/Terrain';
 import { StylizedWater } from './world/Water';
 import { createTreeForest } from './world/Trees';
 import { EnvironmentProps } from './world/Props';
@@ -100,6 +100,10 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.44, 1.2));
   const playerRotYRef = useRef<number>(Math.PI);
   const velocityRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
+  // Bobber fixed water anchor and cast distance for current session
+  const bobberAnchorRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.05, -12));
+  const initialCastDistRef = useRef<number>(14);
+
   // Third-person camera orbit (distance: 4.8 - 5.5m, height: 2.2m)
   const cameraYawRef = useRef<number>(0);
   const cameraPitchRef = useRef<number>(0.22);
@@ -630,9 +634,36 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
           curTension,
           curCastPower,
           elapsedTime,
+          delta,
           isWalking,
           currentSpeed / 3.4
         );
+      }
+
+      // Update bobber landing target whenever entering CASTING
+      if (curState === 'CASTING') {
+        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          playerRotYRef.current
+        );
+        const castDist = Math.max(7, curDist);
+        let targetX = currPos.x + forward.x * castDist;
+        let targetZ = currPos.z + forward.z * castDist;
+
+        // Keep strictly in water: dock is z >= -3.5, lake is z <= -3.8
+        if (targetZ > -3.8) targetZ = -4.2;
+        targetX = Math.max(-26, Math.min(26, targetX));
+        targetZ = Math.max(-36, Math.min(-3.8, targetZ));
+
+        // Terrain height validation
+        const tHeight = getTerrainHeight(targetX, targetZ);
+        if (tHeight >= 0.0) {
+          targetZ = Math.min(-8.0, targetZ);
+          targetX = targetX * 0.6;
+        }
+
+        bobberAnchorRef.current.set(targetX, 0.05, targetZ);
+        initialCastDistRef.current = Math.max(6, Math.hypot(targetX - currPos.x, targetZ - currPos.z));
       }
 
       // 5. Bobber Visibility & Water Physics
@@ -648,30 +679,41 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         const bg = bobberGroupRef.current;
 
         if (isFishingActive) {
-          const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            playerRotYRef.current
-          );
-          const castDist = Math.max(5, curDist);
-          const targetX = currPos.x + forward.x * castDist;
-          const targetZ = currPos.z + forward.z * castDist;
+          const anchor = bobberAnchorRef.current;
+          let targetX = anchor.x;
+          let targetZ = anchor.z;
 
-          bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 5);
-          bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 4);
+          if (curState === 'CASTING') {
+            // During cast charge, bobber moves smoothly along cast preparation arc
+            if (playerRef.current) {
+              const tip = playerRef.current.rodTipPosition;
+              targetX = THREE.MathUtils.lerp(tip.x, anchor.x, curCastPower * 0.35);
+              targetZ = THREE.MathUtils.lerp(tip.z, anchor.z, curCastPower * 0.35);
+            }
+          } else if (curState === 'REELING' || curState === 'HOOKED') {
+            // As fish distance decreases, bobber pulls smoothly along line toward dock
+            const initDist = Math.max(5, initialCastDistRef.current);
+            const reelRatio = Math.max(0, Math.min(1.0, curDist / initDist));
+            targetX = THREE.MathUtils.lerp(currPos.x, anchor.x, reelRatio);
+            targetZ = THREE.MathUtils.lerp(currPos.z - 0.8, anchor.z, reelRatio);
+          }
+
+          bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 8);
+          bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 8);
 
           // Water surface wave height
-          const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.08;
+          const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.06;
           let bobberY = waterY + 0.05;
 
           if (curState === 'BITE') {
-            bobberY -= 0.16 + Math.sin(elapsedTime * 18) * 0.05;
-            bg.rotation.z = Math.sin(elapsedTime * 15) * 0.3;
-            if (waterRef.current && Math.random() > 0.5) {
+            bobberY -= 0.16 + Math.sin(elapsedTime * 22) * 0.05;
+            bg.rotation.z = Math.sin(elapsedTime * 18) * 0.3;
+            if (waterRef.current && Math.random() > 0.4) {
               waterRef.current.addRipple(bg.position.x, bg.position.z, 1.4);
             }
           } else if (curState === 'HOOKED' || curState === 'REELING') {
-            bobberY -= 0.08 + Math.sin(elapsedTime * 12) * 0.04;
-            if (waterRef.current && Math.random() > 0.7) {
+            bobberY -= 0.08 + Math.sin(elapsedTime * 14) * 0.04;
+            if (waterRef.current && Math.random() > 0.6) {
               waterRef.current.addRipple(bg.position.x, bg.position.z, 0.9);
             }
           } else {

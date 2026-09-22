@@ -23,9 +23,17 @@ export class StylizedPlayerCharacter {
   private leftLegGroup: THREE.Group;
   private rightLegGroup: THREE.Group;
 
-  private rodPoleMesh: THREE.Mesh;
-  private reelMesh: THREE.Mesh;
+  // Segmented rod hierarchy for procedural bending without geometry rebuilding
+  private rodHandleGroup: THREE.Group;
+  private rodMidGroup: THREE.Group;
+  private rodTipGroup: THREE.Group;
+  private rodTipMarker: THREE.Object3D;
+
   private rodPoleMat: THREE.MeshStandardMaterial;
+  private reelMesh: THREE.Mesh;
+
+  // Continuous walk phase accumulator (prevents stuttering/phase jumps during lerped acceleration)
+  private walkPhase = 0;
 
   constructor() {
     this.group = new THREE.Group();
@@ -145,7 +153,7 @@ export class StylizedPlayerCharacter {
     this.leftArmGroup.add(lHand);
     this.group.add(this.leftArmGroup);
 
-    // Right arm (gripping rod)
+    // Right arm (gripping rod authoritative attachment point)
     this.rightArmGroup = new THREE.Group();
     this.rightArmGroup.position.set(0.32, 1.12, 0);
     const rArm = new THREE.Mesh(armGeo, jacketMat);
@@ -155,46 +163,95 @@ export class StylizedPlayerCharacter {
     this.rightArmGroup.add(rHand);
     this.group.add(this.rightArmGroup);
 
-    // --- 5. STYLIZED FISHING ROD ---
+    // --- 5. EXACTLY ONE PERSISTENT FISHING ROD (ATTACHED TO RIGHT HAND) ---
     this.rodGroup = new THREE.Group();
-    this.rodGroup.position.set(0.24, 0.72, 0.25);
+    // Hand grip transform offset
+    this.rodGroup.position.set(0, -0.44, 0.08);
+    this.rightArmGroup.add(this.rodGroup);
 
-    // Rod Cork Handle
+    // Shared materials
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.8 });
-    const handleGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.4, 7);
-    const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.y = 0.2;
-    handle.rotation.x = -Math.PI / 4.5;
-    this.rodGroup.add(handle);
-
-    // Rod Pole blank
     this.rodPoleMat = new THREE.MeshStandardMaterial({ color: 0xa16207, roughness: 0.4 });
-    const poleGeo = new THREE.CylinderGeometry(0.012, 0.03, 3.2, 7);
-    poleGeo.translate(0, 1.6, 0);
-    this.rodPoleMesh = new THREE.Mesh(poleGeo, this.rodPoleMat);
-    this.rodPoleMesh.position.y = 0.35;
-    this.rodPoleMesh.rotation.x = -Math.PI / 4.5;
-    this.rodPoleMesh.castShadow = true;
-    this.rodGroup.add(this.rodPoleMesh);
+    const guideMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.8 });
+    const reelMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.85, roughness: 0.2 });
 
-    // Guides along rod
-    for (let g = 0; g < 4; g++) {
-      const guideGeo = new THREE.TorusGeometry(0.03 - g * 0.005, 0.005, 4, 8);
-      const guide = new THREE.Mesh(guideGeo, new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.8 }));
-      guide.position.set(0, 0.8 + g * 0.65, -0.45 - g * 0.45);
-      guide.rotation.x = -Math.PI / 4.5;
-      this.rodGroup.add(guide);
+    // Segment A: Handle and Reel
+    this.rodHandleGroup = new THREE.Group();
+    const handleGeo = new THREE.CylinderGeometry(0.032, 0.032, 0.42, 8);
+    const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.position.y = 0.05;
+    handle.castShadow = true;
+    this.rodHandleGroup.add(handle);
+
+    // Reel attached to handle
+    const reelGeo = new THREE.CylinderGeometry(0.065, 0.065, 0.09, 8);
+    this.reelMesh = new THREE.Mesh(reelGeo, reelMat);
+    this.reelMesh.position.set(0, 0.16, 0.1);
+    this.reelMesh.rotation.z = Math.PI / 2;
+    this.reelMesh.castShadow = true;
+    this.rodHandleGroup.add(this.reelMesh);
+
+    // Reel bracket / spool mount
+    const bracketGeo = new THREE.BoxGeometry(0.025, 0.06, 0.08);
+    const bracket = new THREE.Mesh(bracketGeo, reelMat);
+    bracket.position.set(0, 0.16, 0.05);
+    this.rodHandleGroup.add(bracket);
+
+    this.rodGroup.add(this.rodHandleGroup);
+
+    // Segment B: Rod Mid-Blank (bends on tension)
+    this.rodMidGroup = new THREE.Group();
+    this.rodMidGroup.position.set(0, 0.26, 0);
+
+    const midPoleGeo = new THREE.CylinderGeometry(0.018, 0.028, 1.4, 7);
+    midPoleGeo.translate(0, 0.7, 0);
+    const midPoleMesh = new THREE.Mesh(midPoleGeo, this.rodPoleMat);
+    midPoleMesh.castShadow = true;
+    this.rodMidGroup.add(midPoleMesh);
+
+    // Guides on mid blank
+    for (let g = 0; g < 2; g++) {
+      const guideGeo = new THREE.TorusGeometry(0.024 - g * 0.004, 0.004, 4, 8);
+      const guide = new THREE.Mesh(guideGeo, guideMat);
+      guide.position.set(0, 0.45 + g * 0.55, 0.025);
+      guide.rotation.x = Math.PI / 2;
+      this.rodMidGroup.add(guide);
     }
 
-    // Reel
-    const reelMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.85, roughness: 0.2 });
-    const reelGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.1, 8);
-    this.reelMesh = new THREE.Mesh(reelGeo, reelMat);
-    this.reelMesh.position.set(0, 0.4, -0.15);
-    this.reelMesh.rotation.z = Math.PI / 2;
-    this.rodGroup.add(this.reelMesh);
+    this.rodHandleGroup.add(this.rodMidGroup);
 
-    this.group.add(this.rodGroup);
+    // Segment C: Rod Tip Blank (flexible, bends strongly on tension)
+    this.rodTipGroup = new THREE.Group();
+    this.rodTipGroup.position.set(0, 1.4, 0);
+
+    const tipPoleGeo = new THREE.CylinderGeometry(0.008, 0.018, 1.4, 7);
+    tipPoleGeo.translate(0, 0.7, 0);
+    const tipPoleMesh = new THREE.Mesh(tipPoleGeo, this.rodPoleMat);
+    tipPoleMesh.castShadow = true;
+    this.rodTipGroup.add(tipPoleMesh);
+
+    // Tip guide & marker
+    for (let g = 0; g < 2; g++) {
+      const guideGeo = new THREE.TorusGeometry(0.014 - g * 0.003, 0.003, 4, 8);
+      const guide = new THREE.Mesh(guideGeo, guideMat);
+      guide.position.set(0, 0.5 + g * 0.6, 0.015);
+      guide.rotation.x = Math.PI / 2;
+      this.rodTipGroup.add(guide);
+    }
+
+    // Top eyelet
+    const topEyeletGeo = new THREE.TorusGeometry(0.01, 0.003, 4, 8);
+    const topEyelet = new THREE.Mesh(topEyeletGeo, guideMat);
+    topEyelet.position.set(0, 1.4, 0.012);
+    topEyelet.rotation.x = Math.PI / 2;
+    this.rodTipGroup.add(topEyelet);
+
+    // Tip marker for exact line connection
+    this.rodTipMarker = new THREE.Object3D();
+    this.rodTipMarker.position.set(0, 1.42, 0.012);
+    this.rodTipGroup.add(this.rodTipMarker);
+
+    this.rodMidGroup.add(this.rodTipGroup);
   }
 
   public setCustomRodColor(hex: string) {
@@ -206,16 +263,20 @@ export class StylizedPlayerCharacter {
   }
 
   /**
-   * Updates procedural animation based on movement and fishing state machine
-   * Features organic weight shifts, breathing, synced walk-stride, and multi-stage fishing poses.
+   * Updates procedural animation based on movement and fishing state machine.
+   * Features:
+   * - Phase-accumulated walk cycles (no stutter on lerped acceleration/deceleration)
+   * - Controlled multi-stage procedural rod bending relative to line tension
+   * - Hand-anchored rod transforms that naturally rotate with player character
    */
   public updateAnimation(
     state: string,
     tension: number,
     castPower: number,
     time: number,
+    delta: number,
     isMoving = false,
-    moveSpeed = 0
+    moveSpeedRatio = 0
   ) {
     // 1. Organic Idle & Breathing
     const idleBreath = Math.sin(time * 2.2) * 0.018;
@@ -230,106 +291,179 @@ export class StylizedPlayerCharacter {
     this.headGroup.position.x = weightShift * 0.8;
     this.headGroup.rotation.y = headLook;
 
-    // 2. Walking / Running Leg and Arm Swing
-    if (isMoving && state === 'IDLE') {
-      const cycleSpeed = Math.max(0.5, moveSpeed);
-      const strideFreq = time * 8.5 * cycleSpeed;
-      const legStride = Math.sin(strideFreq) * 0.65;
-      const footLift = Math.max(0, Math.sin(strideFreq)) * 0.12;
+    // Reset default rod bending in non-fight states
+    let midBend = 0;
+    let tipBend = 0;
 
-      // Leg stride & knee bend
+    // 2. Synchronized Walk / Run Stride Cycle
+    if (isMoving && state === 'IDLE') {
+      // Accumulate phase continuously to eliminate jerky phase jumping during lerp transitions
+      this.walkPhase += delta * 9.5 * Math.max(0.3, moveSpeedRatio);
+
+      const legStride = Math.sin(this.walkPhase) * 0.65;
+      const footLift = Math.max(0, Math.sin(this.walkPhase)) * 0.12;
+
+      // Leg stride & foot lift
       this.leftLegGroup.rotation.x = legStride;
       this.rightLegGroup.rotation.x = -legStride;
       this.leftLegGroup.position.y = 0.5 + (legStride > 0 ? footLift : 0);
       this.rightLegGroup.position.y = 0.5 + (legStride < 0 ? footLift : 0);
 
-      // Natural torso step bounce
-      const stepBounce = Math.abs(Math.sin(strideFreq)) * 0.04;
+      // Torso step bounce
+      const stepBounce = Math.abs(Math.sin(this.walkPhase)) * 0.04;
       this.torsoGroup.position.y = 0.85 + stepBounce;
       this.headGroup.position.y = 1.4 + stepBounce;
 
-      // Arm swing opposing legs
-      this.leftArmGroup.rotation.x = -0.3 - legStride * 0.7;
-      this.rightArmGroup.rotation.x = -0.5 + legStride * 0.35;
-      this.rightArmGroup.rotation.z = 0.15;
-      this.rodGroup.rotation.x = Math.sin(strideFreq) * 0.1;
-      this.rodGroup.rotation.z = Math.sin(strideFreq) * 0.04;
-      return;
+      // Arm swing opposing legs while carrying rod naturally
+      this.leftArmGroup.rotation.x = -0.3 - legStride * 0.6;
+      this.leftArmGroup.rotation.z = -0.15;
+      this.leftArmGroup.rotation.y = 0;
+
+      this.rightArmGroup.rotation.x = -0.55 + legStride * 0.25;
+      this.rightArmGroup.rotation.z = 0.2;
+      this.rightArmGroup.rotation.y = -0.1;
+
+      // Natural rod carry angle in hand
+      this.rodGroup.rotation.x = -0.65 + Math.sin(this.walkPhase) * 0.06;
+      this.rodGroup.rotation.y = 0.2;
+      this.rodGroup.rotation.z = -0.1;
+
+      this.rodMidGroup.rotation.x = 0.03;
+      this.rodTipGroup.rotation.x = 0.04;
     } else {
-      // Return legs to neutral grounded stance
-      this.leftLegGroup.rotation.x = 0;
-      this.rightLegGroup.rotation.x = 0;
+      // Smoothly ease legs back to neutral grounded stance
+      this.leftLegGroup.rotation.x = THREE.MathUtils.lerp(this.leftLegGroup.rotation.x, 0, delta * 12);
+      this.rightLegGroup.rotation.x = THREE.MathUtils.lerp(this.rightLegGroup.rotation.x, 0, delta * 12);
       this.leftLegGroup.position.y = 0.5;
       this.rightLegGroup.position.y = 0.5;
+
+      // 3. Multi-phase Fishing Arm and Rod Poses
+      if (state === 'IDLE' || state === 'WAITING' || state === 'CANCELLED') {
+        // Attentive ready stance, rod pointed toward water
+        const waitBob = Math.sin(time * 1.8) * 0.03;
+
+        this.rightArmGroup.rotation.x = -0.7 + waitBob;
+        this.rightArmGroup.rotation.y = -0.15;
+        this.rightArmGroup.rotation.z = 0.22;
+
+        this.leftArmGroup.rotation.x = -0.4 + waitBob * 0.5;
+        this.leftArmGroup.rotation.y = 0.2;
+        this.leftArmGroup.rotation.z = -0.15;
+
+        this.rodGroup.rotation.x = -0.55 + waitBob * 0.5;
+        this.rodGroup.rotation.y = 0.15;
+        this.rodGroup.rotation.z = 0;
+
+        this.headGroup.rotation.x = 0.08; // subtle focus on water
+        this.torsoGroup.rotation.x = 0;
+
+        // Subtle natural rod sag
+        midBend = 0.04;
+        tipBend = 0.06;
+      } else if (state === 'CASTING') {
+        // Wind-up and release arc
+        const prepAngle = -0.4 - castPower * 1.0;
+        this.rightArmGroup.rotation.x = prepAngle;
+        this.rightArmGroup.rotation.y = -0.1;
+        this.rightArmGroup.rotation.z = 0.35;
+
+        this.leftArmGroup.rotation.x = prepAngle * 0.6;
+        this.leftArmGroup.rotation.y = 0.15;
+        this.leftArmGroup.rotation.z = -0.2;
+
+        this.torsoGroup.rotation.x = castPower * 0.18; // leaning back
+        this.headGroup.rotation.x = -0.15;
+
+        // Rod cocked backward over right shoulder
+        this.rodGroup.rotation.x = -0.2 - prepAngle * 0.6;
+        this.rodGroup.rotation.y = 0.25;
+        this.rodGroup.rotation.z = -0.15;
+
+        midBend = castPower * 0.15;
+        tipBend = castPower * 0.25;
+      } else if (state === 'BITE') {
+        // Sudden sharp bite jerk!
+        const jolt = Math.sin(time * 30) * 0.08;
+        this.headGroup.rotation.x = 0.22;
+        this.torsoGroup.rotation.x = 0.06;
+
+        this.rightArmGroup.rotation.x = -0.85 + jolt;
+        this.rightArmGroup.rotation.y = -0.15;
+        this.rightArmGroup.rotation.z = 0.25;
+
+        this.leftArmGroup.rotation.x = -0.6 + jolt;
+        this.leftArmGroup.rotation.y = 0.25;
+        this.leftArmGroup.rotation.z = -0.15;
+
+        this.rodGroup.rotation.x = -0.45 + jolt * 2.0;
+        this.rodGroup.rotation.y = 0.15;
+        this.rodGroup.rotation.z = 0;
+
+        midBend = 0.15 + jolt * 0.8;
+        tipBend = 0.35 + jolt * 1.2;
+      } else if (state === 'HOOKED' || state === 'REELING') {
+        // Dynamic fight: rod bending upward against fish pull, crank arm rotating
+        const clampedTension = Math.max(0, Math.min(1.0, tension));
+        const fightJiggle = Math.sin(time * 16) * (0.03 + clampedTension * 0.05);
+
+        // Torso leans back under strain
+        this.torsoGroup.rotation.x = -0.12 - clampedTension * 0.2;
+        this.headGroup.rotation.x = -0.1;
+
+        // Right arm hoists rod high
+        this.rightArmGroup.rotation.x = -1.25 - clampedTension * 0.3 + fightJiggle;
+        this.rightArmGroup.rotation.y = -0.12;
+        this.rightArmGroup.rotation.z = 0.28;
+
+        // Left arm cranks reel
+        const crankSpeed = state === 'REELING' ? time * 25 : time * 4;
+        this.leftArmGroup.rotation.x = -0.75 + Math.sin(crankSpeed) * 0.16;
+        this.leftArmGroup.rotation.y = 0.35 + Math.cos(crankSpeed) * 0.14;
+        this.leftArmGroup.rotation.z = -0.1;
+
+        this.rodGroup.rotation.x = -0.25 + clampedTension * 0.2 + fightJiggle;
+        this.rodGroup.rotation.y = 0.1;
+        this.rodGroup.rotation.z = Math.sin(time * 8) * (clampedTension * 0.05);
+
+        // Reel spool rotates
+        if (state === 'REELING') {
+          this.reelMesh.rotation.x += delta * 20;
+        }
+
+        // Procedural rod bend under tension
+        // 0% tension -> almost straight (0.08 rad)
+        // 50% tension -> moderate curve (~0.35 rad)
+        // 100% tension -> strong dramatic parabolic bend (~0.75 rad)
+        midBend = 0.08 + clampedTension * 0.32;
+        tipBend = 0.12 + clampedTension * 0.52;
+      } else if (state === 'CAUGHT') {
+        // Catch celebration: rod held triumphantly overhead!
+        this.rightArmGroup.rotation.x = -1.6;
+        this.rightArmGroup.rotation.y = -0.05;
+        this.rightArmGroup.rotation.z = 0.2;
+
+        this.leftArmGroup.rotation.x = -1.5;
+        this.leftArmGroup.rotation.y = 0.05;
+        this.leftArmGroup.rotation.z = -0.2;
+
+        this.torsoGroup.rotation.x = -0.1;
+        this.headGroup.rotation.x = -0.25; // looking up proudly
+
+        this.rodGroup.rotation.x = -0.1;
+        this.rodGroup.rotation.y = 0.1;
+        this.rodGroup.rotation.z = 0;
+
+        midBend = 0.06;
+        tipBend = 0.1;
+      }
+
+      this.rodMidGroup.rotation.x = THREE.MathUtils.lerp(this.rodMidGroup.rotation.x, midBend, delta * 12);
+      this.rodTipGroup.rotation.x = THREE.MathUtils.lerp(this.rodTipGroup.rotation.x, tipBend, delta * 12);
     }
 
-    // 3. Multi-phase Fishing Animations
-    if (state === 'IDLE' || state === 'WAITING' || state === 'CANCELLED') {
-      // Relaxed idle stance, attentive to float
-      const waitBob = Math.sin(time * 1.8) * 0.03;
-      this.rightArmGroup.rotation.x = -0.65 + waitBob;
-      this.rightArmGroup.rotation.z = 0.22;
-      this.leftArmGroup.rotation.x = -0.35 + waitBob * 0.5;
-      this.leftArmGroup.rotation.z = -0.15;
-
-      this.rodGroup.rotation.x = -0.1 + waitBob * 0.8;
-      this.rodGroup.rotation.z = 0;
-      this.headGroup.rotation.x = 0.08; // slightly looking down toward the water
-    } else if (state === 'CASTING') {
-      // Wind up and power back
-      const prepAngle = -0.3 - castPower * 1.1;
-      this.rightArmGroup.rotation.x = prepAngle;
-      this.rightArmGroup.rotation.z = 0.35;
-      this.leftArmGroup.rotation.x = prepAngle * 0.7;
-      this.torsoGroup.rotation.x = castPower * 0.2; // leaning back
-      this.rodGroup.rotation.x = -prepAngle * 1.2;
-      this.headGroup.rotation.x = -0.15; // looking up/forward
-    } else if (state === 'BITE') {
-      // Sudden sharp bite jolt!
-      const jolt = Math.sin(time * 28) * 0.1;
-      this.headGroup.rotation.x = 0.2; // snap look at water
-      this.torsoGroup.rotation.x = 0.08;
-      this.rightArmGroup.rotation.x = -0.95 + jolt;
-      this.leftArmGroup.rotation.x = -0.6 + jolt;
-      this.rodGroup.rotation.x = 0.35 + jolt * 1.5;
-    } else if (state === 'HOOKED' || state === 'REELING') {
-      // Dynamic fight: rod bending, torso leaning back against drag, reel cranking
-      const strainBend = tension * 0.65;
-      const fightJiggle = Math.sin(time * 16) * (0.04 + tension * 0.06);
-
-      // Torso leans back to absorb fish tension
-      this.torsoGroup.rotation.x = -0.15 - strainBend * 0.25;
-      this.headGroup.rotation.x = -0.1;
-
-      // Right arm holds rod tightly, pulling upward
-      this.rightArmGroup.rotation.x = -1.1 - strainBend * 0.4 + fightJiggle;
-      this.rightArmGroup.rotation.z = 0.25;
-
-      // Left arm cranks reel furiously in circles!
-      const crankAngle = time * 24;
-      this.leftArmGroup.rotation.x = -0.7 + Math.sin(crankAngle) * 0.18;
-      this.leftArmGroup.rotation.y = Math.cos(crankAngle) * 0.14;
-
-      // Rod bends dynamically
-      this.rodGroup.rotation.x = 0.4 + strainBend * 0.8 + fightJiggle * 1.2;
-      this.rodGroup.rotation.z = Math.sin(time * 10) * (tension * 0.08);
-
-      // Reel mesh rotation
-      this.reelMesh.rotation.x += 0.4;
-    } else if (state === 'CAUGHT') {
-      // Triumphant catch celebration! Hoisting rod high overhead
-      this.rightArmGroup.rotation.x = -1.55;
-      this.rightArmGroup.rotation.z = 0.2;
-      this.leftArmGroup.rotation.x = -1.45;
-      this.leftArmGroup.rotation.z = -0.2;
-      this.torsoGroup.rotation.x = -0.12;
-      this.headGroup.rotation.x = -0.28; // looking up at catch
-      this.rodGroup.rotation.x = 0.75;
-    }
-
-    // Compute live rod tip position in world space for line attachment
-    const localTip = new THREE.Vector3(0, 3.2, -1.8);
-    this.rodTipPosition = localTip.applyMatrix4(this.rodGroup.matrixWorld);
+    // Update world matrices for accurate rod tip calculation
+    this.group.updateMatrixWorld(true);
+    this.rodTipMarker.getWorldPosition(this.rodTipPosition);
   }
 }
 

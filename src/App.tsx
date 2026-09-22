@@ -184,7 +184,8 @@ export default function App() {
   const [weather, setWeather] = useState<WeatherType>('SUNNY');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('DAY');
 
-  // --- STRICT FISHING STATE MACHINE: IDLE → CASTING → WAITING → BITE → HOOKED → REELING → CAUGHT → IDLE ---
+  // --- STRICT AUTHORITATIVE FISHING STATE MACHINE ---
+  // Allowed: IDLE → CASTING → WAITING → BITE → HOOKED → REELING → CAUGHT → IDLE (or CANCELLED → IDLE)
   const [fishingState, setFishingState] = useState<FishingState>('IDLE');
   const [canFish, setCanFish] = useState<boolean>(true);
   const [castPower, setCastPower] = useState<number>(0);
@@ -198,7 +199,13 @@ export default function App() {
   const [lastCatchRecord, setLastCatchRecord] = useState<CatchRecord | null>(null);
   const [isNewRecordCatch, setIsNewRecordCatch] = useState<boolean>(false);
 
-  // Strict Timer References to prevent memory leaks and orphaned intervals
+  // Authoritative Session Identification to prevent race conditions and orphaned callbacks
+  const sessionIdCounterRef = useRef<number>(0);
+  const activeSessionIdRef = useRef<number>(0);
+  const catchProcessedRef = useRef<boolean>(false);
+  const autoResetTimerRef = useRef<number | null>(null);
+
+  // Strict Timer References
   const castChargeTimerRef = useRef<number | null>(null);
   const biteTimeoutRef = useRef<number | null>(null);
   const biteWindowTimerRef = useRef<number | null>(null);
@@ -210,7 +217,6 @@ export default function App() {
   // Double-action guards
   const isHookingRef = useRef<boolean>(false);
   const isCastingRef = useRef<boolean>(false);
-  const isCatchHandledRef = useRef<boolean>(false);
 
   const equippedRod = RODS.find((r) => r.id === equippedRodId) || RODS[0];
   const equippedReel = REELS.find((r) => r.id === equippedReelId) || REELS[0];
@@ -359,8 +365,9 @@ export default function App() {
     }
   }, [weather, timeOfDay, soundEnabled, isPaused]);
 
-  // Clean timer disposal function
-  const clearAllFishingTimers = useCallback(() => {
+  // Clean session disposal function
+  const cleanupFishingSession = useCallback((reason?: string) => {
+    console.log(`[FISHING] Cleanup session #${activeSessionIdRef.current}: ${reason || 'routine'}`);
     if (castChargeTimerRef.current) {
       clearInterval(castChargeTimerRef.current);
       castChargeTimerRef.current = null;
@@ -389,19 +396,86 @@ export default function App() {
       clearTimeout(hookTransitionTimerRef.current);
       hookTransitionTimerRef.current = null;
     }
+    if (autoResetTimerRef.current) {
+      clearTimeout(autoResetTimerRef.current);
+      autoResetTimerRef.current = null;
+    }
     isHookingRef.current = false;
     isCastingRef.current = false;
-    isCatchHandledRef.current = false;
+    catchProcessedRef.current = false;
+    setIsReeling(false);
+    soundEngine.stopTensionSound();
+    soundEngine.stopReelingSound();
   }, []);
+
+  // Strict Authoritative Transition Validator
+  const transitionFishingState = useCallback(
+    (nextState: FishingState, expectedSessionId?: number, reason?: string) => {
+      if (expectedSessionId !== undefined && expectedSessionId !== activeSessionIdRef.current) {
+        console.debug(
+          `[FISHING] Stale transition to ${nextState} ignored for session #${expectedSessionId} (active: #${activeSessionIdRef.current})`
+        );
+        return false;
+      }
+
+      const VALID_TRANSITIONS: Record<FishingState, FishingState[]> = {
+        IDLE: ['CASTING'],
+        CASTING: ['WAITING', 'CANCELLED', 'IDLE'],
+        WAITING: ['BITE', 'CANCELLED', 'IDLE'],
+        BITE: ['HOOKED', 'CANCELLED', 'IDLE'],
+        HOOKED: ['REELING', 'CANCELLED', 'IDLE'],
+        REELING: ['CAUGHT', 'HOOKED', 'CANCELLED', 'IDLE'],
+        CAUGHT: ['IDLE'],
+        CANCELLED: ['IDLE'],
+      };
+
+      setFishingState((currentState) => {
+        if (currentState === nextState) return currentState;
+        const allowed = VALID_TRANSITIONS[currentState] || [];
+        if (!allowed.includes(nextState)) {
+          console.warn(
+            `[FISHING] Transition rejected: ${currentState} -> ${nextState} [Session #${activeSessionIdRef.current}] (${reason || ''})`
+          );
+          return currentState;
+        }
+        console.log(
+          `[FISHING] State Transition: ${currentState} -> ${nextState} [Session #${activeSessionIdRef.current}] (${reason || ''})`
+        );
+        return nextState;
+      });
+      return true;
+    },
+    []
+  );
+
+  // Hard Reset to IDLE
+  const handleResetToIdle = useCallback(
+    (reason = 'user reset') => {
+      cleanupFishingSession(reason);
+      activeSessionIdRef.current = ++sessionIdCounterRef.current;
+      setFishingState('IDLE');
+      setLineTension(0.3);
+      setCastPower(0);
+    },
+    [cleanupFishingSession]
+  );
+
+  // Auto-recover from CANCELLED state back to IDLE after timeout
+  useEffect(() => {
+    if (fishingState === 'CANCELLED') {
+      if (autoResetTimerRef.current) clearTimeout(autoResetTimerRef.current);
+      autoResetTimerRef.current = window.setTimeout(() => {
+        setFishingState((cur) => (cur === 'CANCELLED' ? 'IDLE' : cur));
+      }, 2500);
+    }
+  }, [fishingState]);
 
   // Cleanup on unmount or pause
   useEffect(() => {
     return () => {
-      clearAllFishingTimers();
-      soundEngine.stopTensionSound();
-      soundEngine.stopReelingSound();
+      cleanupFishingSession('unmount');
     };
-  }, [clearAllFishingTimers]);
+  }, [cleanupFishingSession]);
 
   // Fish spawning & weight scoring logic
   const selectEligibleFish = useCallback((): FishSpecies => {
@@ -450,50 +524,67 @@ export default function App() {
     return FISH_DATABASE[0];
   }, [weather, timeOfDay, equippedBait]);
 
-  // --- BITE & APPROACH TIMERS ---
-  const triggerFishBite = useCallback(() => {
-    setFishingState('BITE');
-    soundEngine.playBiteAlert();
+  // --- BITE & APPROACH TIMERS WITH SESSION IDENTIFICATION ---
+  const triggerFishBite = useCallback(
+    (session: number) => {
+      if (activeSessionIdRef.current !== session) return;
+      transitionFishingState('BITE', session, 'fish bite triggered');
+      soundEngine.playBiteAlert();
 
-    const reactionWindow = 2000;
+      const reactionWindow = 2200;
+      biteWindowTimerRef.current = window.setTimeout(() => {
+        if (activeSessionIdRef.current !== session) return;
+        soundEngine.playHookEscape();
+        transitionFishingState('CANCELLED', session, 'bite reaction window expired');
+      }, reactionWindow);
+    },
+    [transitionFishingState]
+  );
 
-    biteWindowTimerRef.current = window.setTimeout(() => {
-      soundEngine.playHookEscape();
-      setFishingState('CANCELLED');
-    }, reactionWindow);
-  }, []);
+  const scheduleFishApproach = useCallback(
+    (session: number) => {
+      if (approachTimerRef.current) clearTimeout(approachTimerRef.current);
+      if (biteTimeoutRef.current) clearTimeout(biteTimeoutRef.current);
 
-  const scheduleFishApproach = useCallback(() => {
-    if (approachTimerRef.current) clearTimeout(approachTimerRef.current);
-    if (biteTimeoutRef.current) clearTimeout(biteTimeoutRef.current);
+      const baseDelay = Math.random() * 3000 + 2000;
+      const speedMultiplier = 1 / (1 + (equippedBait.biteRateBonus || 0) / 100);
+      const approachDelay = baseDelay * speedMultiplier;
 
-    const baseDelay = Math.random() * 3200 + 2200;
-    const speedMultiplier = 1 / (1 + (equippedBait.biteRateBonus || 0) / 100);
-    const approachDelay = baseDelay * speedMultiplier;
+      approachTimerRef.current = window.setTimeout(() => {
+        if (activeSessionIdRef.current !== session) return;
+        soundEngine.playFishApproaching();
+        const candidateFish = selectEligibleFish();
+        setActiveFish(candidateFish);
 
-    approachTimerRef.current = window.setTimeout(() => {
-      soundEngine.playFishApproaching();
-      const candidateFish = selectEligibleFish();
-      setActiveFish(candidateFish);
-
-      const biteDelay = Math.random() * 1800 + 1000;
-      biteTimeoutRef.current = window.setTimeout(() => {
-        triggerFishBite();
-      }, biteDelay);
-    }, approachDelay);
-  }, [equippedBait, selectEligibleFish, triggerFishBite]);
+        const biteDelay = Math.random() * 1600 + 900;
+        biteTimeoutRef.current = window.setTimeout(() => {
+          if (activeSessionIdRef.current !== session) return;
+          triggerFishBite(session);
+        }, biteDelay);
+      }, approachDelay);
+    },
+    [equippedBait, selectEligibleFish, triggerFishBite]
+  );
 
   // --- CAST CHARGING ---
   const handleStartCastCharge = useCallback(() => {
     if (fishingState !== 'IDLE' || !canFish || isPaused || isCastingRef.current) return;
-    clearAllFishingTimers();
+    cleanupFishingSession('start cast charge');
+    const session = ++sessionIdCounterRef.current;
+    activeSessionIdRef.current = session;
+    catchProcessedRef.current = false;
+
     soundEngine.resume();
-    setFishingState('CASTING');
+    transitionFishingState('CASTING', session, 'start charge');
     setCastPower(0.2);
 
     let power = 0.2;
     let direction = 1;
     castChargeTimerRef.current = window.setInterval(() => {
+      if (activeSessionIdRef.current !== session) {
+        if (castChargeTimerRef.current) clearInterval(castChargeTimerRef.current);
+        return;
+      }
       power += direction * 0.05;
       if (power >= 1.0) {
         power = 1.0;
@@ -504,7 +595,7 @@ export default function App() {
       }
       setCastPower(power);
     }, 40);
-  }, [fishingState, canFish, isPaused, clearAllFishingTimers]);
+  }, [fishingState, canFish, isPaused, cleanupFishingSession, transitionFishingState]);
 
   const handleReleaseCastCharge = useCallback(() => {
     if (castChargeTimerRef.current) {
@@ -512,6 +603,7 @@ export default function App() {
       castChargeTimerRef.current = null;
     }
 
+    const session = activeSessionIdRef.current;
     if (fishingState !== 'CASTING' || !canFish || isCastingRef.current) return;
     isCastingRef.current = true;
 
@@ -522,17 +614,19 @@ export default function App() {
 
     // Bobber lands in water after 650ms
     castLandingTimerRef.current = window.setTimeout(() => {
+      if (activeSessionIdRef.current !== session) return;
       isCastingRef.current = false;
       soundEngine.playBobberSplash();
-      setFishingState('WAITING');
+      transitionFishingState('WAITING', session, 'bobber splash down');
       setLineTension(0.35);
 
-      scheduleFishApproach();
+      scheduleFishApproach(session);
     }, 650);
-  }, [fishingState, canFish, castPower, equippedRod, scheduleFishApproach]);
+  }, [fishingState, canFish, castPower, equippedRod, transitionFishingState, scheduleFishApproach]);
 
   // --- HOOKING & FIGHT REELING ---
   const handleHookFish = useCallback(() => {
+    const session = activeSessionIdRef.current;
     if (fishingState !== 'BITE' || isHookingRef.current) return;
     isHookingRef.current = true;
 
@@ -542,99 +636,102 @@ export default function App() {
     }
 
     soundEngine.playHookSuccess();
-    setFishingState('HOOKED');
+    transitionFishingState('HOOKED', session, 'hook fish success');
     setLineTension(0.45);
 
     hookTransitionTimerRef.current = window.setTimeout(() => {
+      if (activeSessionIdRef.current !== session) return;
       isHookingRef.current = false;
-      // Ready to reel
     }, 300);
-  }, [fishingState]);
+  }, [fishingState, transitionFishingState]);
 
   const handleStartReel = useCallback(() => {
     if (isPaused) return;
+    const session = activeSessionIdRef.current;
     if (fishingState !== 'HOOKED' && fishingState !== 'REELING') return;
     setIsReeling(true);
-    setFishingState('REELING');
+    transitionFishingState('REELING', session, 'reeling initiated');
     soundEngine.startReelingSound();
-  }, [isPaused, fishingState]);
+  }, [isPaused, fishingState, transitionFishingState]);
 
   const handleStopReel = useCallback(() => {
     setIsReeling(false);
     soundEngine.stopReelingSound();
+    const session = activeSessionIdRef.current;
     if (fishingState === 'REELING') {
-      setFishingState('HOOKED');
+      transitionFishingState('HOOKED', session, 'paused reeling');
     }
-  }, [fishingState]);
+  }, [fishingState, transitionFishingState]);
 
-  // --- CATCH SUCCESS PRESENTATION ---
-  const triggerCatchSuccess = useCallback(() => {
-    if (isCatchHandledRef.current) return;
-    isCatchHandledRef.current = true;
+  // --- CATCH SUCCESS PRESENTATION (EXACTLY ONE CATCH RECORD PER SESSION) ---
+  const triggerCatchSuccess = useCallback(
+    (session: number) => {
+      if (activeSessionIdRef.current !== session) return;
+      if (catchProcessedRef.current) return;
+      catchProcessedRef.current = true;
 
-    clearAllFishingTimers();
-    soundEngine.stopTensionSound();
-    soundEngine.stopReelingSound();
+      cleanupFishingSession('catch success');
 
-    const fish = activeFish || FISH_DATABASE[0];
-    const isSpecial = fish.rarity === 'LEGENDARY' || fish.rarity === 'MYTHIC';
-    soundEngine.playCatchSuccess(isSpecial);
+      const fish = activeFish || FISH_DATABASE[0];
+      const isSpecial = fish.rarity === 'LEGENDARY' || fish.rarity === 'MYTHIC';
+      soundEngine.playCatchSuccess(isSpecial);
 
-    const weightRange = fish.maxWeight - fish.minWeight;
-    const lengthRange = fish.maxLength - fish.minLength;
-    const caughtWeight = Number((fish.minWeight + Math.random() * weightRange).toFixed(2));
-    const caughtLength = Number((fish.minLength + Math.random() * lengthRange).toFixed(1));
+      const weightRange = fish.maxWeight - fish.minWeight;
+      const lengthRange = fish.maxLength - fish.minLength;
+      const caughtWeight = Number((fish.minWeight + Math.random() * weightRange).toFixed(2));
+      const caughtLength = Number((fish.minLength + Math.random() * lengthRange).toFixed(1));
 
-    const valueMultiplier = caughtWeight / fish.minWeight;
-    const actualValue = Math.round(fish.baseValue * valueMultiplier);
+      const valueMultiplier = caughtWeight / fish.minWeight;
+      const actualValue = Math.round(fish.baseValue * valueMultiplier);
 
-    const record: CatchRecord = {
-      id: 'catch_' + Date.now(),
-      speciesId: fish.id,
-      speciesName: fish.name,
-      rarity: fish.rarity,
-      weight: caughtWeight,
-      length: caughtLength,
-      value: actualValue,
-      caughtAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      caughtBy: 'Angler',
-      weather,
-      timeOfDay,
-      location: 'Village Dock Waters',
-    };
+      const record: CatchRecord = {
+        id: 'catch_' + Date.now(),
+        speciesId: fish.id,
+        speciesName: fish.name,
+        rarity: fish.rarity,
+        weight: caughtWeight,
+        length: caughtLength,
+        value: actualValue,
+        caughtAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        caughtBy: 'Angler',
+        weather,
+        timeOfDay,
+        location: 'Village Dock Waters',
+      };
 
-    // Store in history
-    setCatchHistory((prev) => [record, ...prev.slice(0, 49)]);
+      // Exactly one addition to history and collection
+      setCatchHistory((prev) => [record, ...prev.slice(0, 49)]);
 
-    // Update encyclopedia unlocked records immediately
-    setUnlockedCatches((prev) => {
-      const cur = prev[record.speciesId];
-      if (!cur || record.weight > cur.weight) {
-        return { ...prev, [record.speciesId]: record };
-      }
-      return prev;
-    });
+      setUnlockedCatches((prev) => {
+        const cur = prev[record.speciesId];
+        if (!cur || record.weight > cur.weight) {
+          return { ...prev, [record.speciesId]: record };
+        }
+        return prev;
+      });
 
-    // Update Daily Missions progress
-    setDailyMissions((prevMissions) => {
-      const { updatedMissions, newCompletedCount } = updateMissionsOnCatch(prevMissions, record);
-      if (newCompletedCount > 0) {
-        soundEngine.playCoinDing();
-      }
-      return updatedMissions;
-    });
+      // Update Daily Missions progress
+      setDailyMissions((prevMissions) => {
+        const { updatedMissions, newCompletedCount } = updateMissionsOnCatch(prevMissions, record);
+        if (newCompletedCount > 0) {
+          soundEngine.playCoinDing();
+        }
+        return updatedMissions;
+      });
 
-    // Check personal record
-    const existing = unlockedCatches[fish.id];
-    const isNewBest = !existing || caughtWeight > existing.weight;
-    setIsNewRecordCatch(isNewBest);
+      // Check personal record
+      const existing = unlockedCatches[fish.id];
+      const isNewBest = !existing || caughtWeight > existing.weight;
+      setIsNewRecordCatch(isNewBest);
 
-    setLastCatchRecord(record);
-    setFishingState('CAUGHT');
-    setShowCatchModal(true);
-  }, [activeFish, weather, timeOfDay, unlockedCatches, clearAllFishingTimers]);
+      setLastCatchRecord(record);
+      transitionFishingState('CAUGHT', session, 'catch completed');
+      setShowCatchModal(true);
+    },
+    [activeFish, weather, timeOfDay, unlockedCatches, cleanupFishingSession, transitionFishingState]
+  );
 
-  // --- ACTIVE FIGHT GAME LOOP: Smooth line tension calculation ---
+  // --- ACTIVE FIGHT GAME LOOP: Deterministic Line Tension Calculation ---
   useEffect(() => {
     if (isPaused || (fishingState !== 'HOOKED' && fishingState !== 'REELING')) {
       if (gameLoopTimerRef.current) {
@@ -644,7 +741,13 @@ export default function App() {
       return;
     }
 
+    const session = activeSessionIdRef.current;
     const interval = window.setInterval(() => {
+      if (activeSessionIdRef.current !== session) {
+        clearInterval(interval);
+        return;
+      }
+
       setLineTension((prevTension) => {
         let nextTension = prevTension;
         const fishDifficulty = activeFish?.difficulty || 3;
@@ -652,17 +755,15 @@ export default function App() {
         const reelDrag = 1 + equippedReel.dragStability / 100;
 
         if (isReeling) {
-          // Reeling increases tension smoothly based on fish resistance
           const tensionRate = (0.016 * (fishDifficulty * 0.6)) / (rodTolerance * reelDrag);
           nextTension += tensionRate;
         } else {
-          // Tension steadily relaxes when not reeling
           nextTension -= 0.018;
         }
 
-        // Controlled subtle fish struggle variance (no erratic spikes)
+        // Controlled subtle fish struggle variance
         if (Math.random() < 0.08) {
-          nextTension += (Math.random() * 0.05 * fishDifficulty) / rodTolerance;
+          nextTension += (Math.random() * 0.04 * fishDifficulty) / rodTolerance;
         }
 
         soundEngine.updateTensionSound(nextTension);
@@ -670,7 +771,7 @@ export default function App() {
         // Snap condition: High tension sustained >= 0.98
         if (nextTension >= 0.98) {
           soundEngine.playLineSnap();
-          setFishingState('CANCELLED');
+          transitionFishingState('CANCELLED', session, 'line snapped under tension');
           setIsReeling(false);
           soundEngine.stopReelingSound();
           return 1.0;
@@ -680,7 +781,7 @@ export default function App() {
         if (nextTension <= 0.02) {
           soundEngine.stopTensionSound();
           soundEngine.stopReelingSound();
-          setFishingState('CANCELLED');
+          transitionFishingState('CANCELLED', session, 'line tension collapsed');
           setIsReeling(false);
           return 0.0;
         }
@@ -690,16 +791,14 @@ export default function App() {
 
       setFishDistance((prevDist) => {
         if (!isReeling) {
-          // Fish swims slightly away when free
           return Math.min(22, prevDist + 0.04);
         }
 
-        // Reel speed pulls fish inward
         const reelSpeed = 0.22 * (1 + equippedReel.reelSpeedBonus / 100);
         const nextDist = prevDist - reelSpeed;
 
         if (nextDist <= 1.0) {
-          triggerCatchSuccess();
+          triggerCatchSuccess(session);
           return 0;
         }
 
@@ -712,7 +811,16 @@ export default function App() {
       clearInterval(interval);
       gameLoopTimerRef.current = null;
     };
-  }, [fishingState, isReeling, isPaused, activeFish, equippedRod, equippedReel, triggerCatchSuccess]);
+  }, [
+    fishingState,
+    isReeling,
+    isPaused,
+    activeFish,
+    equippedRod,
+    equippedReel,
+    triggerCatchSuccess,
+    transitionFishingState,
+  ]);
 
   const handleSellCatch = useCallback(() => {
     if (lastCatchRecord) {
@@ -720,9 +828,12 @@ export default function App() {
       soundEngine.playCoinDing();
     }
     setShowCatchModal(false);
-    clearAllFishingTimers();
+    cleanupFishingSession('sell catch');
+    activeSessionIdRef.current = ++sessionIdCounterRef.current;
     setFishingState('IDLE');
-  }, [lastCatchRecord, clearAllFishingTimers]);
+    setCastPower(0);
+    setLineTension(0.3);
+  }, [lastCatchRecord, cleanupFishingSession]);
 
   const handleKeepCatch = useCallback(() => {
     if (lastCatchRecord) {
@@ -734,17 +845,12 @@ export default function App() {
       soundEngine.playEquipGear();
     }
     setShowCatchModal(false);
-    clearAllFishingTimers();
+    cleanupFishingSession('keep catch');
+    activeSessionIdRef.current = ++sessionIdCounterRef.current;
     setFishingState('IDLE');
-  }, [lastCatchRecord, clearAllFishingTimers]);
-
-  const handleResetToIdle = useCallback(() => {
-    clearAllFishingTimers();
-    soundEngine.stopTensionSound();
-    soundEngine.stopReelingSound();
-    setIsReeling(false);
-    setFishingState('IDLE');
-  }, [clearAllFishingTimers]);
+    setCastPower(0);
+    setLineTension(0.3);
+  }, [lastCatchRecord, cleanupFishingSession]);
 
   // Weather & Time toggles
   const cycleWeather = () => {
