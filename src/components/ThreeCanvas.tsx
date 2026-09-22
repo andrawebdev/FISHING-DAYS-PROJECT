@@ -303,6 +303,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       // 5. Authoritative Camera Controller
       onLoadingProgress?.(85, 'INITIALIZING CAMERA CONTROLLER...');
       const cameraController = new CameraController(50, width / height, 0.1, 220);
+      cameraController.attach(renderer.domElement);
       cameraControllerRef.current = cameraController;
 
       // Connect camera rotation handler for mobile swipe & external inputs
@@ -403,36 +404,6 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
 
       window.addEventListener('keydown', handleKeyDown);
       window.addEventListener('keyup', handleKeyUp);
-
-      // Desktop mouse drag for camera orbit
-      let isMouseDragging = false;
-      let prevMouseX = 0;
-      let prevMouseY = 0;
-
-      const handleMouseDown = (e: MouseEvent) => {
-        if (e.button === 0 || e.button === 2) {
-          isMouseDragging = true;
-          prevMouseX = e.clientX;
-          prevMouseY = e.clientY;
-        }
-      };
-
-      const handleMouseMove = (e: MouseEvent) => {
-        if (!isMouseDragging || !cameraControllerRef.current) return;
-        const dx = e.clientX - prevMouseX;
-        const dy = e.clientY - prevMouseY;
-        prevMouseX = e.clientX;
-        prevMouseY = e.clientY;
-        cameraControllerRef.current.rotate(dx * 0.005, dy * 0.004);
-      };
-
-      const handleMouseUp = () => {
-        isMouseDragging = false;
-      };
-
-      container.addEventListener('mousedown', handleMouseDown);
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
 
       // Viewport Resize Handler (Does not recreate camera or scene)
       const handleResize = () => {
@@ -743,16 +714,10 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
           }
         }
 
-        // Authoritative Camera Update with collision & shake feedback
+        // Authoritative Camera Update with collision & smooth non-shaking follow
         if (cameraControllerRef.current) {
           cameraControllerRef.current.setFishingMode(isFishingActive);
-          let shake = 0;
-          if (curState === 'BITE') {
-            shake = 0.035;
-          } else if (curState === 'REELING') {
-            shake = 0.02 + curTension * 0.03;
-          }
-          cameraControllerRef.current.update(currPos, delta, shake);
+          cameraControllerRef.current.update(currPos, delta);
           renderer.render(scene, cameraControllerRef.current.camera);
         }
       };
@@ -765,9 +730,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         window.removeEventListener('keydown', handleKeyDown);
         window.removeEventListener('keyup', handleKeyUp);
         window.removeEventListener('resize', handleResize);
-        container.removeEventListener('mousedown', handleMouseDown);
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
+
+        if (cameraControllerRef.current) {
+          cameraControllerRef.current.dispose();
+          cameraControllerRef.current = null;
+        }
 
         if (cameraRotateRef) {
           cameraRotateRef.current = null;

@@ -1,27 +1,59 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <!-- High Contrast Black & White Maximalism Badge -->
+  <!-- High Contrast Black Background -->
   <rect width="512" height="512" rx="64" fill="#000000" />
-  <rect x="24" y="24" width="464" height="464" rx="48" fill="none" stroke="#ffffff" stroke-width="12" />
-  <rect x="44" y="44" width="424" height="424" rx="36" fill="none" stroke="#ffffff" stroke-width="4" stroke-dasharray="16 8" />
+  
+  <!-- Outer Box Frames -->
+  <rect x="20" y="20" width="472" height="472" rx="48" fill="none" stroke="#ffffff" stroke-width="12" />
+  <rect x="36" y="36" width="440" height="440" rx="36" fill="none" stroke="#ffffff" stroke-width="3" stroke-dasharray="16 8" opacity="0.75" />
 
-  <!-- Mountain Peaks -->
-  <polygon points="60,330 180,210 260,290 350,180 452,330" fill="#222222" stroke="#ffffff" stroke-width="6" />
+  <!-- Corner Brackets -->
+  <path d="M 20,70 L 70,20" stroke="#ffffff" stroke-width="6" />
+  <path d="M 442,20 L 492,70" stroke="#ffffff" stroke-width="6" />
+  <path d="M 20,442 L 70,492" stroke="#ffffff" stroke-width="6" />
+  <path d="M 442,492 L 492,442" stroke="#ffffff" stroke-width="6" />
 
-  <!-- Water Lines -->
-  <line x1="60" y1="350" x2="452" y2="350" stroke="#ffffff" stroke-width="6" />
-  <line x1="90" y1="375" x2="422" y2="375" stroke="#ffffff" stroke-width="4" stroke-dasharray="24 12" />
-  <line x1="130" y1="400" x2="382" y2="400" stroke="#ffffff" stroke-width="4" />
+  <!-- Top Ribbon Subtitle -->
+  <text x="256" y="76" font-family="monospace" font-weight="900" font-size="14" fill="#ffffff" text-anchor="middle" letter-spacing="8">EST. 2026 // COZY LAKE EXPEDITION</text>
+  <line x1="60" y1="88" x2="452" y2="88" stroke="#ffffff" stroke-width="3" />
 
-  <!-- Leaping Fish Silhouette in Pure White -->
-  <path d="M 280,270 C 230,220 180,250 160,280 C 130,285 110,270 95,255 C 105,290 120,315 150,310 C 180,330 240,320 290,285 Z" fill="#ffffff" stroke="#000000" stroke-width="4" />
-  <!-- Fish Tail & Fin -->
-  <polygon points="95,255 70,240 85,275" fill="#ffffff" />
-  <polygon points="95,255 65,285 90,275" fill="#ffffff" />
-  <polygon points="210,242 235,215 245,246" fill="#ffffff" />
+  <!-- Mountain Silhouettes -->
+  <polygon points="68,290 148,190 220,270 316,160 444,290" fill="#181818" stroke="#ffffff" stroke-width="6" stroke-linejoin="round" />
 
-  <!-- Fishing Hook / Line Stroke -->
-  <path d="M 330,110 C 370,160 380,230 350,290 C 335,320 300,340 270,330 C 245,320 245,295 260,285 C 275,275 290,290 280,305" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+  <!-- Pine Tree Silhouettes on Lakeside -->
+  <polygon points="100,290 112,250 124,290" fill="#ffffff" />
+  <polygon points="120,290 130,258 140,290" fill="#ffffff" />
+  <polygon points="380,290 392,246 404,290" fill="#ffffff" />
 
-  <!-- Bold Typography Overlay -->
-  <text x="256" y="455" font-family="monospace" font-weight="900" font-size="34" fill="#ffffff" text-anchor="middle" letter-spacing="6">FISHING DAYS</text>
+  <!-- Water Surface & Ripples -->
+  <line x1="56" y1="306" x2="456" y2="306" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+  <line x1="88" y1="328" x2="424" y2="328" stroke="#ffffff" stroke-width="5" stroke-dasharray="20 12" stroke-linecap="round" />
+  <line x1="140" y1="348" x2="372" y2="348" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Leaping Fish Silhouette in White -->
+  <path d="M 314,196 C 286,154 216,164 170,210 C 136,244 122,274 102,284 C 126,288 150,276 172,260 C 160,276 146,292 124,302 C 158,306 192,288 218,266 C 260,232 300,238 328,226 C 338,222 346,208 336,198 C 328,192 320,194 314,196 Z" 
+        fill="#ffffff" stroke="#000000" stroke-width="4" stroke-linejoin="round" />
+
+  <!-- Fish Tail & Fins -->
+  <polygon points="102,284 74,266 84,294" fill="#ffffff" />
+  <polygon points="102,284 72,306 96,298" fill="#ffffff" />
+  <polygon points="236,162 260,138 274,168" fill="#ffffff" />
+  <polygon points="228,252 208,274 234,264" fill="#ffffff" />
+
+  <!-- Fish Eye & Details -->
+  <circle cx="320" cy="208" r="4" fill="#000000" />
+  <circle cx="321" cy="207" r="1.5" fill="#ffffff" />
+  <path d="M 298,202 Q 284,216 294,232" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Classic Curved Fishing Rod Across Canvas -->
+  <path d="M 80,360 Q 240,110 410,120" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+  
+  <!-- Line Hanging from Rod Tip -->
+  <path d="M 410,120 C 435,170 425,230 380,266 C 362,280 338,290 320,284 C 300,274 302,252 316,242 C 330,232 344,246 338,260" 
+        fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
+  <polygon points="336,258 348,246 344,266" fill="#ffffff" />
+
+  <!-- Bottom Brand Block -->
+  <rect x="56" y="380" width="400" height="74" fill="#000000" stroke="#ffffff" stroke-width="6" />
+  <text x="256" y="426" font-family="monospace" font-weight="900" font-size="34" fill="#ffffff" text-anchor="middle" letter-spacing="8">FISHING DAYS</text>
+  <text x="256" y="444" font-family="monospace" font-weight="700" font-size="10" fill="#888888" text-anchor="middle" letter-spacing="4">3D COZY LAKE SIMULATOR</text>
 </svg>
