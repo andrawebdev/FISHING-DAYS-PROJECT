@@ -1,70 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f2b38" />
-      <stop offset="50%" stop-color="#1b4d5e" />
-      <stop offset="100%" stop-color="#2d6e7e" />
-    </linearGradient>
-    <linearGradient id="sunGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#f97316" />
-      <stop offset="100%" stop-color="#fde047" />
-    </linearGradient>
-    <linearGradient id="fishGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38bdf8" />
-      <stop offset="50%" stop-color="#2dd4bf" />
-      <stop offset="100%" stop-color="#a7f3d0" />
-    </linearGradient>
-    <linearGradient id="rodGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fed7aa" />
-      <stop offset="100%" stop-color="#f97316" />
-    </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="8" result="blur" />
-      <feComposite in="SourceGraphic" in2="blur" operator="over" />
-    </filter>
-  </defs>
+  <!-- High Contrast Black & White Maximalism Badge -->
+  <rect width="512" height="512" rx="64" fill="#000000" />
+  <rect x="24" y="24" width="464" height="464" rx="48" fill="none" stroke="#ffffff" stroke-width="12" />
+  <rect x="44" y="44" width="424" height="424" rx="36" fill="none" stroke="#ffffff" stroke-width="4" stroke-dasharray="16 8" />
 
-  <!-- Background Circle Badge -->
-  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)" stroke="#38bdf8" stroke-width="8" stroke-opacity="0.3" />
+  <!-- Mountain Peaks -->
+  <polygon points="60,330 180,210 260,290 350,180 452,330" fill="#222222" stroke="#ffffff" stroke-width="6" />
 
-  <!-- Warm Sun / Moon -->
-  <circle cx="256" cy="180" r="85" fill="url(#sunGrad)" opacity="0.9" />
+  <!-- Water Lines -->
+  <line x1="60" y1="350" x2="452" y2="350" stroke="#ffffff" stroke-width="6" />
+  <line x1="90" y1="375" x2="422" y2="375" stroke="#ffffff" stroke-width="4" stroke-dasharray="24 12" />
+  <line x1="130" y1="400" x2="382" y2="400" stroke="#ffffff" stroke-width="4" />
 
-  <!-- Mountain Silhouettes -->
-  <path d="M60 360 L180 230 L270 320 L370 210 L460 360 Z" fill="#0b202c" opacity="0.75" />
-  <path d="M120 370 L220 280 L320 360 L420 290 L480 370 Z" fill="#07161e" opacity="0.9" />
+  <!-- Leaping Fish Silhouette in Pure White -->
+  <path d="M 280,270 C 230,220 180,250 160,280 C 130,285 110,270 95,255 C 105,290 120,315 150,310 C 180,330 240,320 290,285 Z" fill="#ffffff" stroke="#000000" stroke-width="4" />
+  <!-- Fish Tail & Fin -->
+  <polygon points="95,255 70,240 85,275" fill="#ffffff" />
+  <polygon points="95,255 65,285 90,275" fill="#ffffff" />
+  <polygon points="210,242 235,215 245,246" fill="#ffffff" />
 
-  <!-- Water Surface & Ripples -->
-  <path d="M30 360 C120 345, 180 375, 270 360 C360 345, 420 375, 482 360 L482 480 C410 495, 330 495, 256 495 C182 495, 102 495, 30 480 Z" fill="#093145" />
-  <path d="M80 395 C160 385, 240 405, 320 395 C380 388, 410 398, 450 395" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.6" />
-  <path d="M120 430 C190 422, 270 438, 350 428 C380 425, 400 430, 420 428" stroke="#67e8f9" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
+  <!-- Fishing Hook / Line Stroke -->
+  <path d="M 330,110 C 370,160 380,230 350,290 C 335,320 300,340 270,330 C 245,320 245,295 260,285 C 275,275 290,290 280,305" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" />
 
-  <!-- Jumping Trophy Fish -->
-  <g transform="translate(230, 240) rotate(-22)" filter="url(#glow)">
-    <!-- Fish Body -->
-    <path d="M-80 0 C-40 -45, 40 -40, 80 0 C40 35, -40 40, -80 0 Z" fill="url(#fishGrad)" />
-    <!-- Tail Fin -->
-    <path d="M-75 0 L-125 -35 C-110 0, -110 0, -125 35 Z" fill="#2dd4bf" />
-    <!-- Dorsal Fin -->
-    <path d="M-10 -35 C15 -55, 40 -45, 50 -25 Z" fill="#38bdf8" opacity="0.9" />
-    <!-- Pectoral Fin -->
-    <path d="M10 10 C30 25, 45 20, 35 5 Z" fill="#67e8f9" opacity="0.8" />
-    <!-- Eye -->
-    <circle cx="55" cy="-8" r="6" fill="#0f172a" />
-    <circle cx="57" cy="-10" r="2" fill="#ffffff" />
-    <!-- Gill curve -->
-    <path d="M35 -15 C45 0, 45 10, 35 18" stroke="#0f172a" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.4" />
-  </g>
-
-  <!-- Fishing Rod Arc & Line -->
-  <path d="M90 420 Q160 120 350 110" stroke="url(#rodGrad)" stroke-width="6" stroke-linecap="round" fill="none" />
-  <!-- Fishing Line -->
-  <path d="M350 110 Q370 190 310 240" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4 2" fill="none" opacity="0.85" />
-  <!-- Hook / Bobber -->
-  <circle cx="310" cy="242" r="7" fill="#ef4444" stroke="#ffffff" stroke-width="2" />
-
-  <!-- Sparkles & Stars -->
-  <circle cx="140" cy="140" r="3" fill="#fef08a" opacity="0.8" />
-  <circle cx="380" cy="160" r="4" fill="#fef08a" opacity="0.9" />
-  <circle cx="410" cy="100" r="2.5" fill="#fef08a" opacity="0.7" />
+  <!-- Bold Typography Overlay -->
+  <text x="256" y="455" font-family="monospace" font-weight="900" font-size="34" fill="#ffffff" text-anchor="middle" letter-spacing="6">FISHING DAYS</text>
 </svg>

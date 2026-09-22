@@ -74,22 +74,27 @@ export const MobileJoystick: React.FC<MobileJoystickProps> = ({ onMove, disabled
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
-      className={`relative w-28 h-28 rounded-full border-2 transition-opacity ${
+      className={`relative w-28 h-28 rounded-full border-4 transition-opacity ${
         disabled
-          ? 'opacity-30 border-slate-700 pointer-events-none'
-          : 'border-cyan-400/40 bg-slate-950/60 backdrop-blur-md shadow-2xl'
+          ? 'opacity-30 border-[#444444] pointer-events-none'
+          : 'border-white bg-black/80 shadow-[4px_4px_0px_0px_#ffffff]'
       } flex items-center justify-center touch-none select-none`}
     >
       {/* Outer directional ticks */}
-      <div className="absolute inset-2 rounded-full border border-dashed border-cyan-500/20" />
-      {/* Knob */}
+      <div className="absolute inset-2 rounded-full border border-dashed border-white/40" />
+
+      {/* Center crosshair */}
+      <div className="absolute w-2 h-0.5 bg-white/50" />
+      <div className="absolute h-2 w-0.5 bg-white/50" />
+
+      {/* High contrast Chunky Knob */}
       <div
-        className="w-12 h-12 rounded-full bg-gradient-to-b from-cyan-400 to-teal-600 shadow-lg border border-cyan-200 flex items-center justify-center transition-transform"
+        className="w-12 h-12 rounded-full bg-white text-black border-2 border-black flex items-center justify-center shadow-lg transition-transform"
         style={{
           transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
         }}
       >
-        <div className="w-4 h-4 rounded-full bg-white/40" />
+        <div className="w-4 h-4 rounded-full bg-black" />
       </div>
     </div>
   );

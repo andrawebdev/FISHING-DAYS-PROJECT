@@ -99,6 +99,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   // Player state: start cleanly on dock walkway facing lake (-Z)
   const playerPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.44, 1.2));
   const playerRotYRef = useRef<number>(Math.PI);
+  const velocityRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
   // Third-person camera orbit (distance: 4.8 - 5.5m, height: 2.2m)
   const cameraYawRef = useRef<number>(0);
   const cameraPitchRef = useRef<number>(0.22);
@@ -548,10 +549,9 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         }
       }
 
-      // 4. Player Movement & Grounding (Active in IDLE state when not paused)
+      // 4. Player Movement & Grounding (Smooth Acceleration / Deceleration)
       const canMove = curState === 'IDLE' && !curPaused;
-      let moveX = 0;
-      let moveZ = 0;
+      const targetVel = new THREE.Vector2(0, 0);
 
       if (canMove) {
         // Desktop WASD
@@ -572,13 +572,28 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         const inputMag = Math.hypot(kx, kz);
         if (inputMag > 0.05) {
           const angle = Math.atan2(kx, kz) + cameraYawRef.current;
-          const speed = (k.shift ? 5.2 : 3.4) * Math.min(1.0, inputMag);
-          moveX = Math.sin(angle) * speed;
-          moveZ = Math.cos(angle) * speed;
-
-          const targetRot = Math.atan2(moveX, moveZ);
-          playerRotYRef.current = THREE.MathUtils.lerp(playerRotYRef.current, targetRot, delta * 12);
+          const maxSpeed = (k.shift ? 5.2 : 3.4) * Math.min(1.0, inputMag);
+          targetVel.x = Math.sin(angle) * maxSpeed;
+          targetVel.y = Math.cos(angle) * maxSpeed;
         }
+      }
+
+      // Smooth interpolation for acceleration (9) and deceleration (12)
+      const lerpSpeed = targetVel.lengthSq() > 0.01 ? 9 : 12;
+      velocityRef.current.lerp(targetVel, delta * lerpSpeed);
+
+      const moveX = velocityRef.current.x;
+      const moveZ = velocityRef.current.y;
+      const currentSpeed = velocityRef.current.length();
+
+      // Smooth rotation toward movement direction
+      if (currentSpeed > 0.15) {
+        const targetRot = Math.atan2(moveX, moveZ);
+        // Shortest angle difference to prevent 360 spinning
+        let diff = (targetRot - playerRotYRef.current) % (Math.PI * 2);
+        if (diff < -Math.PI) diff += Math.PI * 2;
+        if (diff > Math.PI) diff -= Math.PI * 2;
+        playerRotYRef.current += diff * Math.min(1.0, delta * 9);
       }
 
       // Apply collision & ground resolution
@@ -609,14 +624,14 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         playerRef.current.setCustomRodColor(curCustom.rodColor);
         playerRef.current.setCustomReelColor(REEL_METAL_COLORS[curCustom.reelMetalTint] || 0xcbd5e1);
 
-        const isWalking = Math.hypot(moveX, moveZ) > 0.1;
+        const isWalking = currentSpeed > 0.1;
         playerRef.current.updateAnimation(
           curState,
           curTension,
           curCastPower,
           elapsedTime,
           isWalking,
-          Math.hypot(moveX, moveZ) / 3.4
+          currentSpeed / 3.4
         );
       }
 
@@ -651,8 +666,13 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
           if (curState === 'BITE') {
             bobberY -= 0.16 + Math.sin(elapsedTime * 18) * 0.05;
             bg.rotation.z = Math.sin(elapsedTime * 15) * 0.3;
-            if (waterRef.current && Math.random() > 0.6) {
-              waterRef.current.addRipple(bg.position.x, bg.position.z, 1.2);
+            if (waterRef.current && Math.random() > 0.5) {
+              waterRef.current.addRipple(bg.position.x, bg.position.z, 1.4);
+            }
+          } else if (curState === 'HOOKED' || curState === 'REELING') {
+            bobberY -= 0.08 + Math.sin(elapsedTime * 12) * 0.04;
+            if (waterRef.current && Math.random() > 0.7) {
+              waterRef.current.addRipple(bg.position.x, bg.position.z, 0.9);
             }
           } else {
             bg.rotation.z = Math.sin(elapsedTime * 2) * 0.06;
@@ -708,7 +728,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         }
       }
 
-      // 8. Third-Person Camera: distance 4.8–5.5m, height 2.2m
+      // 8. Third-Person Camera with smooth lag and gentle feedback
       if (cameraRef.current) {
         const cam = cameraRef.current;
 
@@ -720,12 +740,17 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
         const camTargetZ = currPos.z + Math.cos(cameraYawRef.current) * orbitRadius;
         const camTargetY = Math.max(0.6, currPos.y + camHeight);
 
-        let shakeX = 0;
-        if (curState === 'REELING') {
-          shakeX = Math.sin(elapsedTime * 12) * 0.05;
+        let biteShake = 0;
+        if (curState === 'BITE') {
+          biteShake = Math.sin(elapsedTime * 30) * 0.03;
+        } else if (curState === 'REELING') {
+          biteShake = Math.sin(elapsedTime * 14) * 0.035;
         }
 
-        cam.position.lerp(new THREE.Vector3(camTargetX + shakeX, camTargetY, camTargetZ), delta * 5);
+        cam.position.lerp(
+          new THREE.Vector3(camTargetX + biteShake, camTargetY, camTargetZ + biteShake * 0.5),
+          delta * 4.5
+        );
         cam.lookAt(currPos.x, currPos.y + 1.1, currPos.z);
       }
 

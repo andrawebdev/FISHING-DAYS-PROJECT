@@ -207,6 +207,7 @@ export class StylizedPlayerCharacter {
 
   /**
    * Updates procedural animation based on movement and fishing state machine
+   * Features organic weight shifts, breathing, synced walk-stride, and multi-stage fishing poses.
    */
   public updateAnimation(
     state: string,
@@ -216,56 +217,114 @@ export class StylizedPlayerCharacter {
     isMoving = false,
     moveSpeed = 0
   ) {
-    const idleBreath = Math.sin(time * 2.2) * 0.02;
-    this.torsoGroup.position.y = 0.85 + idleBreath;
-    this.headGroup.position.y = 1.4 + idleBreath;
+    // 1. Organic Idle & Breathing
+    const idleBreath = Math.sin(time * 2.2) * 0.018;
+    const weightShift = Math.sin(time * 0.8) * 0.015;
+    const headLook = Math.sin(time * 0.6) * 0.1;
 
-    // Walking leg and arm swing
+    this.torsoGroup.position.y = 0.85 + idleBreath;
+    this.torsoGroup.position.x = weightShift;
+    this.torsoGroup.rotation.z = weightShift * 0.5;
+
+    this.headGroup.position.y = 1.4 + idleBreath;
+    this.headGroup.position.x = weightShift * 0.8;
+    this.headGroup.rotation.y = headLook;
+
+    // 2. Walking / Running Leg and Arm Swing
     if (isMoving && state === 'IDLE') {
-      const legStride = Math.sin(time * 10 * moveSpeed) * 0.55;
+      const cycleSpeed = Math.max(0.5, moveSpeed);
+      const strideFreq = time * 8.5 * cycleSpeed;
+      const legStride = Math.sin(strideFreq) * 0.65;
+      const footLift = Math.max(0, Math.sin(strideFreq)) * 0.12;
+
+      // Leg stride & knee bend
       this.leftLegGroup.rotation.x = legStride;
       this.rightLegGroup.rotation.x = -legStride;
-      this.leftArmGroup.rotation.x = -0.3 - legStride * 0.6;
-      this.rightArmGroup.rotation.x = -0.6 + legStride * 0.4;
-      this.rodGroup.rotation.x = Math.sin(time * 10 * moveSpeed) * 0.08;
-      this.rodGroup.rotation.z = 0;
+      this.leftLegGroup.position.y = 0.5 + (legStride > 0 ? footLift : 0);
+      this.rightLegGroup.position.y = 0.5 + (legStride < 0 ? footLift : 0);
+
+      // Natural torso step bounce
+      const stepBounce = Math.abs(Math.sin(strideFreq)) * 0.04;
+      this.torsoGroup.position.y = 0.85 + stepBounce;
+      this.headGroup.position.y = 1.4 + stepBounce;
+
+      // Arm swing opposing legs
+      this.leftArmGroup.rotation.x = -0.3 - legStride * 0.7;
+      this.rightArmGroup.rotation.x = -0.5 + legStride * 0.35;
+      this.rightArmGroup.rotation.z = 0.15;
+      this.rodGroup.rotation.x = Math.sin(strideFreq) * 0.1;
+      this.rodGroup.rotation.z = Math.sin(strideFreq) * 0.04;
       return;
     } else {
-      // Return legs to neutral
+      // Return legs to neutral grounded stance
       this.leftLegGroup.rotation.x = 0;
       this.rightLegGroup.rotation.x = 0;
+      this.leftLegGroup.position.y = 0.5;
+      this.rightLegGroup.position.y = 0.5;
     }
 
+    // 3. Multi-phase Fishing Animations
     if (state === 'IDLE' || state === 'WAITING' || state === 'CANCELLED') {
-      // Relaxed idle stance
-      this.rightArmGroup.rotation.x = -0.6 + Math.sin(time * 1.5) * 0.03;
-      this.rightArmGroup.rotation.z = 0.2;
-      this.leftArmGroup.rotation.x = -0.3 + Math.cos(time * 1.8) * 0.03;
-      this.rodGroup.rotation.x = Math.sin(time * 1.5) * 0.04;
+      // Relaxed idle stance, attentive to float
+      const waitBob = Math.sin(time * 1.8) * 0.03;
+      this.rightArmGroup.rotation.x = -0.65 + waitBob;
+      this.rightArmGroup.rotation.z = 0.22;
+      this.leftArmGroup.rotation.x = -0.35 + waitBob * 0.5;
+      this.leftArmGroup.rotation.z = -0.15;
+
+      this.rodGroup.rotation.x = -0.1 + waitBob * 0.8;
       this.rodGroup.rotation.z = 0;
+      this.headGroup.rotation.x = 0.08; // slightly looking down toward the water
     } else if (state === 'CASTING') {
-      // Forward cast whip
-      const prepAngle = -0.4 - castPower * 0.8;
+      // Wind up and power back
+      const prepAngle = -0.3 - castPower * 1.1;
       this.rightArmGroup.rotation.x = prepAngle;
-      this.rodGroup.rotation.x = -prepAngle * 0.9;
+      this.rightArmGroup.rotation.z = 0.35;
+      this.leftArmGroup.rotation.x = prepAngle * 0.7;
+      this.torsoGroup.rotation.x = castPower * 0.2; // leaning back
+      this.rodGroup.rotation.x = -prepAngle * 1.2;
+      this.headGroup.rotation.x = -0.15; // looking up/forward
     } else if (state === 'BITE') {
-      // Alert jolt
-      this.headGroup.rotation.x = 0.1;
-      this.rightArmGroup.rotation.x = -0.9 + Math.sin(time * 20) * 0.06;
-      this.rodGroup.rotation.x = 0.2;
+      // Sudden sharp bite jolt!
+      const jolt = Math.sin(time * 28) * 0.1;
+      this.headGroup.rotation.x = 0.2; // snap look at water
+      this.torsoGroup.rotation.x = 0.08;
+      this.rightArmGroup.rotation.x = -0.95 + jolt;
+      this.leftArmGroup.rotation.x = -0.6 + jolt;
+      this.rodGroup.rotation.x = 0.35 + jolt * 1.5;
     } else if (state === 'HOOKED' || state === 'REELING') {
-      // Fighting fish: rod bent, arms straining, reeling handle turning
-      const strainBend = tension * 0.55;
-      this.rightArmGroup.rotation.x = -0.9 - strainBend + Math.sin(time * 14) * 0.05;
-      this.leftArmGroup.rotation.x = -0.7 + Math.sin(time * 18) * 0.15; // Cranking reel
-      this.rodGroup.rotation.x = 0.35 + strainBend + Math.sin(time * 14) * 0.06;
-      this.torsoGroup.rotation.x = -strainBend * 0.3;
+      // Dynamic fight: rod bending, torso leaning back against drag, reel cranking
+      const strainBend = tension * 0.65;
+      const fightJiggle = Math.sin(time * 16) * (0.04 + tension * 0.06);
+
+      // Torso leans back to absorb fish tension
+      this.torsoGroup.rotation.x = -0.15 - strainBend * 0.25;
+      this.headGroup.rotation.x = -0.1;
+
+      // Right arm holds rod tightly, pulling upward
+      this.rightArmGroup.rotation.x = -1.1 - strainBend * 0.4 + fightJiggle;
+      this.rightArmGroup.rotation.z = 0.25;
+
+      // Left arm cranks reel furiously in circles!
+      const crankAngle = time * 24;
+      this.leftArmGroup.rotation.x = -0.7 + Math.sin(crankAngle) * 0.18;
+      this.leftArmGroup.rotation.y = Math.cos(crankAngle) * 0.14;
+
+      // Rod bends dynamically
+      this.rodGroup.rotation.x = 0.4 + strainBend * 0.8 + fightJiggle * 1.2;
+      this.rodGroup.rotation.z = Math.sin(time * 10) * (tension * 0.08);
+
+      // Reel mesh rotation
+      this.reelMesh.rotation.x += 0.4;
     } else if (state === 'CAUGHT') {
-      // Celebratory hold rod up high!
-      this.rightArmGroup.rotation.x = -1.4;
-      this.leftArmGroup.rotation.x = -1.4;
-      this.rodGroup.rotation.x = 0.6;
-      this.headGroup.rotation.x = -0.2;
+      // Triumphant catch celebration! Hoisting rod high overhead
+      this.rightArmGroup.rotation.x = -1.55;
+      this.rightArmGroup.rotation.z = 0.2;
+      this.leftArmGroup.rotation.x = -1.45;
+      this.leftArmGroup.rotation.z = -0.2;
+      this.torsoGroup.rotation.x = -0.12;
+      this.headGroup.rotation.x = -0.28; // looking up at catch
+      this.rodGroup.rotation.x = 0.75;
     }
 
     // Compute live rod tip position in world space for line attachment
@@ -273,3 +332,4 @@ export class StylizedPlayerCharacter {
     this.rodTipPosition = localTip.applyMatrix4(this.rodGroup.matrixWorld);
   }
 }
+

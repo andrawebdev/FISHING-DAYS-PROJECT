@@ -230,3 +230,16 @@ export interface AnglerPeer {
   avatar?: string;
   lastCatch?: { name: string; rarity: string; weight: number };
 }
+
+export interface DailyMission {
+  id: string;
+  title: string;
+  description: string;
+  targetType: 'FISH_SPECIES' | 'WEATHER' | 'RARITY' | 'CATCH_COUNT';
+  targetValue: string | number;
+  targetCount: number;
+  currentCount: number;
+  rewardCoins: number;
+  completed: boolean;
+  claimed: boolean;
+}

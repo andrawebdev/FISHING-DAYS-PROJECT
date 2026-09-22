@@ -15,6 +15,7 @@ import {
   CabinTheme,
   DockLighting,
   MountedTrophy,
+  DailyMission,
 } from './types';
 import { FISH_DATABASE } from './data/fishDatabase';
 import {
@@ -26,6 +27,7 @@ import {
   DEFAULT_GEAR_CUSTOMIZATION,
   INITIAL_CRAFTING_MATERIALS,
 } from './data/gearDatabase';
+import { INITIAL_DAILY_MISSIONS, updateMissionsOnCatch } from './data/dailyMissions';
 import { soundEngine } from './services/soundEngine';
 import { ThreeCanvas } from './components/ThreeCanvas';
 import { FishingHUD } from './components/FishingHUD';
@@ -36,6 +38,7 @@ import { EnvironmentControlBar } from './components/EnvironmentControlBar';
 import { TackleShopModal } from './components/TackleShopModal';
 import { GearCustomizationModal } from './components/GearCustomizationModal';
 import { PlayerCabinModal } from './components/PlayerCabinModal';
+import { DailyMissionsModal } from './components/DailyMissionsModal';
 
 export default function App() {
   // --- PLAYER PROGRESSION & INVENTORY STATE ---
@@ -165,6 +168,17 @@ export default function App() {
   const [showTackleShop, setShowTackleShop] = useState<boolean>(false);
   const [showCustomizationModal, setShowCustomizationModal] = useState<boolean>(false);
   const [showCabinModal, setShowCabinModal] = useState<boolean>(false);
+  const [showDailyMissionsModal, setShowDailyMissionsModal] = useState<boolean>(false);
+
+  // Daily Missions System
+  const [dailyMissions, setDailyMissions] = useState<DailyMission[]>(() => {
+    try {
+      const saved = localStorage.getItem('fishing_days_daily_missions');
+      return saved ? JSON.parse(saved) : INITIAL_DAILY_MISSIONS;
+    } catch {
+      return INITIAL_DAILY_MISSIONS;
+    }
+  });
 
   // --- ENVIRONMENT & ATMOSPHERE ---
   const [weather, setWeather] = useState<WeatherType>('SUNNY');
@@ -196,6 +210,7 @@ export default function App() {
   // Double-action guards
   const isHookingRef = useRef<boolean>(false);
   const isCastingRef = useRef<boolean>(false);
+  const isCatchHandledRef = useRef<boolean>(false);
 
   const equippedRod = RODS.find((r) => r.id === equippedRodId) || RODS[0];
   const equippedReel = REELS.find((r) => r.id === equippedReelId) || REELS[0];
@@ -257,6 +272,25 @@ export default function App() {
       localStorage.setItem('fishing_days_materials', JSON.stringify(craftingMaterials));
     } catch {}
   }, [craftingMaterials]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fishing_days_daily_missions', JSON.stringify(dailyMissions));
+    } catch {}
+  }, [dailyMissions]);
+
+  const handleClaimMission = (missionId: string) => {
+    setDailyMissions((prev) =>
+      prev.map((m) => {
+        if (m.id === missionId && m.completed && !m.claimed) {
+          setCoins((c) => c + m.rewardCoins);
+          soundEngine.playCoinDing();
+          return { ...m, claimed: true };
+        }
+        return m;
+      })
+    );
+  };
 
   // Gear & Shop Action Handlers
   const handleBuyOrEquipRod = (rod: RodItem) => {
@@ -357,6 +391,7 @@ export default function App() {
     }
     isHookingRef.current = false;
     isCastingRef.current = false;
+    isCatchHandledRef.current = false;
   }, []);
 
   // Cleanup on unmount or pause
@@ -534,6 +569,9 @@ export default function App() {
 
   // --- CATCH SUCCESS PRESENTATION ---
   const triggerCatchSuccess = useCallback(() => {
+    if (isCatchHandledRef.current) return;
+    isCatchHandledRef.current = true;
+
     clearAllFishingTimers();
     soundEngine.stopTensionSound();
     soundEngine.stopReelingSound();
@@ -567,6 +605,24 @@ export default function App() {
 
     // Store in history
     setCatchHistory((prev) => [record, ...prev.slice(0, 49)]);
+
+    // Update encyclopedia unlocked records immediately
+    setUnlockedCatches((prev) => {
+      const cur = prev[record.speciesId];
+      if (!cur || record.weight > cur.weight) {
+        return { ...prev, [record.speciesId]: record };
+      }
+      return prev;
+    });
+
+    // Update Daily Missions progress
+    setDailyMissions((prevMissions) => {
+      const { updatedMissions, newCompletedCount } = updateMissionsOnCatch(prevMissions, record);
+      if (newCompletedCount > 0) {
+        soundEngine.playCoinDing();
+      }
+      return updatedMissions;
+    });
 
     // Check personal record
     const existing = unlockedCatches[fish.id];
@@ -662,15 +718,6 @@ export default function App() {
     if (lastCatchRecord) {
       setCoins((prev) => prev + lastCatchRecord.value);
       soundEngine.playCoinDing();
-      setCatchHistory((prev) => [lastCatchRecord, ...prev]);
-
-      setUnlockedCatches((prev) => {
-        const cur = prev[lastCatchRecord.speciesId];
-        if (!cur || lastCatchRecord.weight > cur.weight) {
-          return { ...prev, [lastCatchRecord.speciesId]: lastCatchRecord };
-        }
-        return prev;
-      });
     }
     setShowCatchModal(false);
     clearAllFishingTimers();
@@ -679,19 +726,12 @@ export default function App() {
 
   const handleKeepCatch = useCallback(() => {
     if (lastCatchRecord) {
-      setCatchHistory((prev) => [lastCatchRecord, ...prev]);
       setCraftingMaterials((prev) => ({
         ...prev,
         fish_scales: (prev.fish_scales || 0) + 1,
         polished_pebble: (prev.polished_pebble || 0) + (Math.random() < 0.5 ? 1 : 0),
       }));
-      setUnlockedCatches((prev) => {
-        const cur = prev[lastCatchRecord.speciesId];
-        if (!cur || lastCatchRecord.weight > cur.weight) {
-          return { ...prev, [lastCatchRecord.speciesId]: lastCatchRecord };
-        }
-        return prev;
-      });
+      soundEngine.playEquipGear();
     }
     setShowCatchModal(false);
     clearAllFishingTimers();
@@ -729,7 +769,8 @@ export default function App() {
     showCollectionModal ||
     showTackleShop ||
     showCustomizationModal ||
-    showCabinModal;
+    showCabinModal ||
+    showDailyMissionsModal;
 
   // Keyboard accessibility
   useEffect(() => {
@@ -748,6 +789,7 @@ export default function App() {
         if (showTackleShop) setShowTackleShop(false);
         if (showCustomizationModal) setShowCustomizationModal(false);
         if (showCabinModal) setShowCabinModal(false);
+        if (showDailyMissionsModal) setShowDailyMissionsModal(false);
         if (fishingState !== 'IDLE') handleResetToIdle();
         return;
       }
@@ -814,6 +856,8 @@ export default function App() {
         soundEnabled={soundEnabled}
         language={language}
         isPaused={isPaused}
+        dailyMissions={dailyMissions}
+        onOpenDailyMissions={() => setShowDailyMissionsModal(true)}
         onTogglePause={() => setIsPaused((p) => !p)}
         onCycleWeather={cycleWeather}
         onCycleTimeOfDay={cycleTimeOfDay}
@@ -968,6 +1012,16 @@ export default function App() {
           onSwitchToCabinView={() => {
             setShowCabinModal(false);
           }}
+        />
+      )}
+
+      {/* 10. DAILY MISSIONS MODAL */}
+      {showDailyMissionsModal && (
+        <DailyMissionsModal
+          isOpen={showDailyMissionsModal}
+          onClose={() => setShowDailyMissionsModal(false)}
+          missions={dailyMissions}
+          onClaim={handleClaimMission}
         />
       )}
     </main>

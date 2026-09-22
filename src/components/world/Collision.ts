@@ -70,7 +70,8 @@ export function getGroundInfo(x: number, z: number): GroundInfo {
 }
 
 /**
- * Resolves player collision with world bounds, water edges (when not on dock), and solid props.
+ * Resolves player collision with world bounds, water edges, and solid obstacles.
+ * Prevents object clipping, falling off dock edges into water, or stepping into deep water.
  * Returns the corrected [nextX, nextZ].
  */
 export function resolvePlayerCollision(
@@ -84,23 +85,31 @@ export function resolvePlayerCollision(
   let nz = targetZ;
 
   // 1. World exploration boundary (keep within village & lake shore area)
-  const maxBoundary = 36.0;
+  const maxBoundary = 34.0;
   nx = Math.max(-maxBoundary, Math.min(maxBoundary, nx));
-  nz = Math.max(-4.0, Math.min(26.0, nz)); // Don't walk into open deep water unless on dock
+  nz = Math.max(-3.0, Math.min(25.0, nz));
 
-  // 2. Dock vs Water check:
-  // If moving into deep water (z < -0.2), must be strictly on dock walkway
-  if (nz < -0.2) {
-    const dockMinX = -2.2 + playerRadius;
-    const dockMaxX = 2.2 - playerRadius;
-    const dockMinZ = -3.0 + playerRadius;
+  // 2. Dock vs Shoreline constraints
+  const dockMinX = -2.2 + playerRadius;
+  const dockMaxX = 2.2 - playerRadius;
+  const dockMinZ = -3.0 + playerRadius;
+  const dockTransitionZ = 6.2;
 
-    // Constrain to dock bounds
+  // If entering or standing on dock forward section (z < 6.2)
+  if (nz < dockTransitionZ && Math.abs(currX) <= 2.3) {
+    // Keep strictly on dock planks
     nx = Math.max(dockMinX, Math.min(dockMaxX, nx));
-    nz = Math.max(dockMinZ, Math.min(6.8, nz));
+    nz = Math.max(dockMinZ, Math.min(dockTransitionZ, nz));
+  } else if (nz < 1.2 && (nx < dockMinX || nx > dockMaxX)) {
+    // On land approaching lake shore: don't step into deep water basin
+    const tHeight = getTerrainHeight(nx, nz);
+    if (tHeight < 0.2) {
+      // Push back to safe shoreline elevation
+      nz = Math.max(1.2, nz);
+    }
   }
 
-  // 3. Obstacle avoidance
+  // 3. Obstacle collision resolution
   for (const obs of WORLD_OBSTACLES) {
     const dx = nx - obs.x;
     const dz = nz - obs.z;
@@ -113,6 +122,12 @@ export function resolvePlayerCollision(
       nx += dx * push;
       nz += dz * push;
     }
+  }
+
+  // 4. Re-enforce dock constraints if pushed near dock water
+  if (nz < dockTransitionZ && Math.abs(nx) <= 2.3) {
+    nx = Math.max(dockMinX, Math.min(dockMaxX, nx));
+    nz = Math.max(dockMinZ, Math.min(dockTransitionZ, nz));
   }
 
   return [nx, nz];

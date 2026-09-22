@@ -4,7 +4,7 @@ import { RodItem, ReelItem, LineItem, BaitItem, SupportedLanguage } from '../typ
 import { RODS, REELS, LINES, BAITS } from '../data/gearDatabase';
 import { LOCALIZATION } from '../data/localization';
 import { soundEngine } from '../services/soundEngine';
-import { X, ShoppingBag, Coins, Check, ShieldCheck, Zap } from 'lucide-react';
+import { X, ShoppingBag, Coins, Check, Zap, Shield } from 'lucide-react';
 
 interface TackleShopModalProps {
   coins: number;
@@ -43,128 +43,112 @@ export const TackleShopModal: React.FC<TackleShopModalProps> = ({
   const [tab, setTab] = useState<'RODS' | 'REELS' | 'LINES' | 'BAITS'>('RODS');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-black/75 backdrop-blur-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm pointer-events-auto">
       <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
+        initial={{ opacity: 0, scale: 0.94 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        className="relative w-full max-w-3xl h-[85vh] bg-slate-900/95 border border-slate-700/80 rounded-3xl p-5 md:p-7 shadow-2xl flex flex-col text-slate-100 overflow-hidden"
+        exit={{ opacity: 0, scale: 0.94 }}
+        className="relative w-full max-w-3xl h-[86vh] bg-black text-white border-4 border-white p-4 sm:p-6 shadow-[8px_8px_0px_0px_#ffffff] flex flex-col font-mono select-none overflow-hidden"
       >
-        {/* Header with coins balance */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-950/80 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-xl md:text-2xl font-black text-slate-100">{t.gearShop}</h2>
-              <span className="text-xs text-slate-400">Upgrade gear to improve catch rates</span>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b-2 border-white pb-3 mb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-xl font-black uppercase tracking-widest">
+              TACKLE SHOP
+            </h2>
+            <div className="bg-white text-black px-2 py-0.5 text-xs font-black">
+              FUNDS: ${coins}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="px-3.5 py-1.5 bg-slate-950 border border-amber-500/40 rounded-xl flex items-center gap-2 text-amber-300 font-mono font-bold text-sm shadow-inner">
-              <Coins className="w-4 h-4" />
-              <span>{coins}</span>
-            </div>
-            <button
-              id="btn-close-shop"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            id="btn-close-shop"
+            onClick={onClose}
+            className="p-1 border-2 border-white hover:bg-white hover:text-black transition cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Category Tabs */}
-        <div className="flex gap-2 border-b border-slate-800 pb-3 mb-4">
-          {(['RODS', 'REELS', 'LINES', 'BAITS'] as const).map((category) => (
-            <button
-              key={category}
-              onClick={() => setTab(category)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                tab === category
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
-                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+        {/* Tab Selection */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
+          {(['RODS', 'REELS', 'LINES', 'BAITS'] as const).map((category) => {
+            const isActive = tab === category;
+            return (
+              <button
+                key={category}
+                onClick={() => setTab(category)}
+                className={`py-2 text-xs font-black uppercase tracking-wider border-2 transition cursor-pointer text-center ${
+                  isActive
+                    ? 'bg-white text-black border-white'
+                    : 'bg-black text-white border-white/60 hover:border-white'
+                }`}
+              >
+                {category}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Gear Items Grid */}
-        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3">
+        {/* Catalog List */}
+        <div className="flex-1 overflow-y-auto space-y-2.5 pr-1">
+          {/* RODS */}
           {tab === 'RODS' &&
             RODS.map((rod) => {
-              const isUnlocked = unlockedGearIds.includes(rod.id) || rod.price === 0;
+              const isUnlocked = unlockedGearIds.includes(rod.id);
               const isEquipped = equippedRodId === rod.id;
               const canAfford = coins >= rod.price;
 
               return (
                 <div
                   key={rod.id}
-                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
+                  className={`p-3.5 border-2 flex items-center justify-between gap-3 ${
                     isEquipped
-                      ? 'bg-slate-800/90 border-cyan-400 shadow-md'
-                      : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                      ? 'border-white bg-[#222222] shadow-[3px_3px_0px_0px_#ffffff]'
+                      : 'border-white/50 bg-black'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-12 h-12 rounded-xl border flex items-center justify-center text-xl"
-                      style={{
-                        backgroundColor: rod.color + '22',
-                        borderColor: rod.color + '66',
-                      }}
-                    >
-                      🎣
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm text-slate-100">{rod.name}</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-300 font-mono">
-                          Tier {rod.tier}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
+                        {rod.name}
+                      </span>
+                      {isEquipped && (
+                        <span className="text-[10px] bg-white text-black px-1.5 py-0.2 font-black uppercase">
+                          EQUIPPED
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{rod.description}</p>
-                      <div className="flex gap-3 text-[11px] font-semibold text-emerald-400 mt-1">
-                        <span>+{rod.castDistanceBonus}% Cast Range</span>
-                        <span>+{rod.tensionToleranceBonus}% Tension Grace</span>
-                      </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] opacity-75 mt-0.5">{rod.description}</p>
+                    <div className="flex gap-3 text-[10px] uppercase font-bold opacity-90 mt-1">
+                      <span>CAST: +{rod.castDistanceBonus}%</span>
+                      <span>TENSION TOLERANCE: +{rod.tensionToleranceBonus}%</span>
                     </div>
                   </div>
 
-                  <div>
+                  <div className="shrink-0">
                     {isEquipped ? (
-                      <span className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5" /> Equipped
+                      <span className="text-xs font-black uppercase px-3 py-1.5 border border-white text-white">
+                        ACTIVE
                       </span>
                     ) : isUnlocked ? (
                       <button
                         onClick={() => onBuyOrEquipRod(rod)}
-                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition cursor-pointer"
+                        className="px-4 py-1.5 bg-white text-black text-xs font-black uppercase border border-white hover:bg-black hover:text-white transition cursor-pointer"
                       >
-                        Equip
+                        EQUIP
                       </button>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (canAfford) {
-                            soundEngine.playCoinDing();
-                            onBuyOrEquipRod(rod);
-                          }
-                        }}
+                        onClick={() => onBuyOrEquipRod(rod)}
                         disabled={!canAfford}
-                        className={`px-5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                        className={`px-4 py-1.5 text-xs font-black uppercase border transition cursor-pointer ${
                           canAfford
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 hover:brightness-110 shadow-md'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            ? 'bg-white text-black border-white hover:bg-black hover:text-white'
+                            : 'bg-black text-[#666666] border-[#444444] cursor-not-allowed'
                         }`}
                       >
-                        <Coins className="w-3.5 h-3.5" />
-                        <span>Buy ${rod.price}</span>
+                        BUY ${rod.price}
                       </button>
                     )}
                   </div>
@@ -172,69 +156,63 @@ export const TackleShopModal: React.FC<TackleShopModalProps> = ({
               );
             })}
 
+          {/* REELS */}
           {tab === 'REELS' &&
             REELS.map((reel) => {
-              const isUnlocked = unlockedGearIds.includes(reel.id) || reel.price === 0;
+              const isUnlocked = unlockedGearIds.includes(reel.id);
               const isEquipped = equippedReelId === reel.id;
               const canAfford = coins >= reel.price;
 
               return (
                 <div
                   key={reel.id}
-                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
+                  className={`p-3.5 border-2 flex items-center justify-between gap-3 ${
                     isEquipped
-                      ? 'bg-slate-800/90 border-cyan-400 shadow-md'
-                      : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                      ? 'border-white bg-[#222222] shadow-[3px_3px_0px_0px_#ffffff]'
+                      : 'border-white/50 bg-black'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
-                      ⚙️
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm text-slate-100">{reel.name}</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-300 font-mono">
-                          Tier {reel.tier}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
+                        {reel.name}
+                      </span>
+                      {isEquipped && (
+                        <span className="text-[10px] bg-white text-black px-1.5 py-0.2 font-black uppercase">
+                          EQUIPPED
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{reel.description}</p>
-                      <div className="flex gap-3 text-[11px] font-semibold text-emerald-400 mt-1">
-                        <span>+{reel.reelSpeedBonus}% Reeling Velocity</span>
-                        <span>+{reel.dragStability}% Drag Balance</span>
-                      </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] opacity-75 mt-0.5">{reel.description}</p>
+                    <div className="flex gap-3 text-[10px] uppercase font-bold opacity-90 mt-1">
+                      <span>SPEED: +{reel.reelSpeedBonus}%</span>
+                      <span>DRAG STABILITY: +{reel.dragStability}%</span>
                     </div>
                   </div>
 
-                  <div>
+                  <div className="shrink-0">
                     {isEquipped ? (
-                      <span className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5" /> Equipped
+                      <span className="text-xs font-black uppercase px-3 py-1.5 border border-white text-white">
+                        ACTIVE
                       </span>
                     ) : isUnlocked ? (
                       <button
                         onClick={() => onBuyOrEquipReel(reel)}
-                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition cursor-pointer"
+                        className="px-4 py-1.5 bg-white text-black text-xs font-black uppercase border border-white hover:bg-black hover:text-white transition cursor-pointer"
                       >
-                        Equip
+                        EQUIP
                       </button>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (canAfford) {
-                            soundEngine.playCoinDing();
-                            onBuyOrEquipReel(reel);
-                          }
-                        }}
+                        onClick={() => onBuyOrEquipReel(reel)}
                         disabled={!canAfford}
-                        className={`px-5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                        className={`px-4 py-1.5 text-xs font-black uppercase border transition cursor-pointer ${
                           canAfford
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 hover:brightness-110 shadow-md'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            ? 'bg-white text-black border-white hover:bg-black hover:text-white'
+                            : 'bg-black text-[#666666] border-[#444444] cursor-not-allowed'
                         }`}
                       >
-                        <Coins className="w-3.5 h-3.5" />
-                        <span>Buy ${reel.price}</span>
+                        BUY ${reel.price}
                       </button>
                     )}
                   </div>
@@ -242,69 +220,63 @@ export const TackleShopModal: React.FC<TackleShopModalProps> = ({
               );
             })}
 
+          {/* LINES */}
           {tab === 'LINES' &&
             LINES.map((line) => {
-              const isUnlocked = unlockedGearIds.includes(line.id) || line.price === 0;
+              const isUnlocked = unlockedGearIds.includes(line.id);
               const isEquipped = equippedLineId === line.id;
               const canAfford = coins >= line.price;
 
               return (
                 <div
                   key={line.id}
-                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
+                  className={`p-3.5 border-2 flex items-center justify-between gap-3 ${
                     isEquipped
-                      ? 'bg-slate-800/90 border-cyan-400 shadow-md'
-                      : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                      ? 'border-white bg-[#222222] shadow-[3px_3px_0px_0px_#ffffff]'
+                      : 'border-white/50 bg-black'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
-                      🧵
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm text-slate-100">{line.name}</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-cyan-300 font-mono">
-                          Tier {line.tier}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
+                        {line.name}
+                      </span>
+                      {isEquipped && (
+                        <span className="text-[10px] bg-white text-black px-1.5 py-0.2 font-black uppercase">
+                          EQUIPPED
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{line.description}</p>
-                      <div className="flex gap-3 text-[11px] font-semibold text-emerald-400 mt-1">
-                        <span>Max Pull: {line.strengthKg} kg</span>
-                        <span>+{line.snapResistance}% Break Resistance</span>
-                      </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] opacity-75 mt-0.5">{line.description}</p>
+                    <div className="flex gap-3 text-[10px] uppercase font-bold opacity-90 mt-1">
+                      <span>STRENGTH: {line.strengthKg} KG</span>
+                      <span>SNAP RESIST: +{line.snapResistance}%</span>
                     </div>
                   </div>
 
-                  <div>
+                  <div className="shrink-0">
                     {isEquipped ? (
-                      <span className="px-4 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5" /> Equipped
+                      <span className="text-xs font-black uppercase px-3 py-1.5 border border-white text-white">
+                        ACTIVE
                       </span>
                     ) : isUnlocked ? (
                       <button
                         onClick={() => onBuyOrEquipLine(line)}
-                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition cursor-pointer"
+                        className="px-4 py-1.5 bg-white text-black text-xs font-black uppercase border border-white hover:bg-black hover:text-white transition cursor-pointer"
                       >
-                        Equip
+                        EQUIP
                       </button>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (canAfford) {
-                            soundEngine.playCoinDing();
-                            onBuyOrEquipLine(line);
-                          }
-                        }}
+                        onClick={() => onBuyOrEquipLine(line)}
                         disabled={!canAfford}
-                        className={`px-5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                        className={`px-4 py-1.5 text-xs font-black uppercase border transition cursor-pointer ${
                           canAfford
-                            ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 hover:brightness-110 shadow-md'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                            ? 'bg-white text-black border-white hover:bg-black hover:text-white'
+                            : 'bg-black text-[#666666] border-[#444444] cursor-not-allowed'
                         }`}
                       >
-                        <Coins className="w-3.5 h-3.5" />
-                        <span>Buy ${line.price}</span>
+                        BUY ${line.price}
                       </button>
                     )}
                   </div>
@@ -312,6 +284,7 @@ export const TackleShopModal: React.FC<TackleShopModalProps> = ({
               );
             })}
 
+          {/* BAITS */}
           {tab === 'BAITS' &&
             BAITS.map((bait) => {
               const currentStock = baitInventory[bait.id] || 0;
@@ -321,63 +294,49 @@ export const TackleShopModal: React.FC<TackleShopModalProps> = ({
               return (
                 <div
                   key={bait.id}
-                  className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition ${
+                  className={`p-3.5 border-2 flex items-center justify-between gap-3 ${
                     isEquipped
-                      ? 'bg-slate-800/90 border-cyan-400 shadow-md'
-                      : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
+                      ? 'border-white bg-[#222222] shadow-[3px_3px_0px_0px_#ffffff]'
+                      : 'border-white/50 bg-black'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl">
-                      {bait.icon}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-sm text-slate-100">{bait.name}</h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-300 font-mono">
-                          Target: {bait.rarityTier}+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
+                        {bait.name}
+                      </span>
+                      {isEquipped && (
+                        <span className="text-[10px] bg-white text-black px-1.5 py-0.2 font-black uppercase">
+                          HOOKED BAIT
                         </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{bait.description}</p>
-                      <div className="flex gap-3 text-[11px] font-semibold text-cyan-400 mt-1">
-                        <span>Stock: {currentStock} in tackle box</span>
-                        <span>+{bait.rarityBoostPercent}% Rare Attraction</span>
-                      </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] opacity-75 mt-0.5">{bait.description}</p>
+                    <div className="flex gap-3 text-[10px] uppercase font-bold opacity-90 mt-1">
+                      <span>INVENTORY: {currentStock}x</span>
+                      <span>RARITY BOOST: +{bait.rarityBoostPercent}%</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {currentStock > 0 && !isEquipped && (
                       <button
                         onClick={() => onEquipBait(bait.id)}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-600 transition cursor-pointer"
+                        className="px-3 py-1.5 bg-black text-white text-xs font-black uppercase border border-white hover:bg-white hover:text-black transition cursor-pointer"
                       >
-                        Equip
+                        ATTACH
                       </button>
                     )}
-
-                    {isEquipped && (
-                      <span className="px-3.5 py-2 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-xs font-bold flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5" /> Hooked
-                      </span>
-                    )}
-
                     <button
-                      onClick={() => {
-                        if (canAfford) {
-                          soundEngine.playCoinDing();
-                          onBuyBait(bait);
-                        }
-                      }}
+                      onClick={() => onBuyBait(bait)}
                       disabled={!canAfford}
-                      className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer ${
+                      className={`px-3 py-1.5 text-xs font-black uppercase border transition cursor-pointer ${
                         canAfford
-                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 hover:brightness-110 shadow-md'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                          ? 'bg-white text-black border-white hover:bg-black hover:text-white'
+                          : 'bg-black text-[#666666] border-[#444444] cursor-not-allowed'
                       }`}
                     >
-                      <Coins className="w-3.5 h-3.5" />
-                      <span>+{bait.count} for ${bait.price}</span>
+                      +5x (${bait.price})
                     </button>
                   </div>
                 </div>
