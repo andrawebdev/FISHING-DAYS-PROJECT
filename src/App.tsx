@@ -910,7 +910,10 @@ export default function App() {
       if (isPaused) return;
 
       if (e.code === 'Escape') {
-        if (showCatchModal) setShowCatchModal(false);
+        if (showCatchModal) {
+          handleKeepCatch();
+          return;
+        }
         if (showCollectionModal) setShowCollectionModal(false);
         if (showTackleShop) setShowTackleShop(false);
         if (showCustomizationModal) setShowCustomizationModal(false);
@@ -974,26 +977,6 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
-      {/* 1. TOP ENVIRONMENT & UTILITY BAR */}
-      <EnvironmentControlBar
-        weather={weather}
-        timeOfDay={timeOfDay}
-        coins={coins}
-        soundEnabled={soundEnabled}
-        language={language}
-        isPaused={isPaused}
-        dailyMissions={dailyMissions}
-        onOpenDailyMissions={() => setShowDailyMissionsModal(true)}
-        onTogglePause={() => setIsPaused((p) => !p)}
-        onCycleWeather={cycleWeather}
-        onCycleTimeOfDay={cycleTimeOfDay}
-        onToggleSound={toggleSound}
-        onOpenCollection={() => setShowCollectionModal(true)}
-        onOpenShop={() => setShowTackleShop(true)}
-        onOpenCustomization={() => setShowCustomizationModal(true)}
-        onOpenCabin={() => setShowCabinModal(true)}
-      />
-
       {/* 1. LOADING SCREEN (BLACK + WHITE MAXIMALISM) */}
       <LoadingScreen
         progress={loadingProgress}

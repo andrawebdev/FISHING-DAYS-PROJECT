@@ -38,6 +38,15 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
 }) => {
   const t = LOCALIZATION[language] || LOCALIZATION.en;
 
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  React.useEffect(() => {
+    const hasTouch =
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    setIsTouchDevice(hasTouch);
+  }, []);
+
   // Pointer event handlers to prevent double-tap or ghost firing
   const handleStartCast = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -96,8 +105,8 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
 
       {/* 3. CONTEXTUAL FISHING CONTROLS */}
       <AnimatePresence mode="wait">
-        {/* STATE: IDLE or CASTING */}
-        {(fishingState === 'IDLE' || fishingState === 'CASTING') && canFish && (
+        {/* STATE: IDLE or CASTING (Desktop button only; mobile has thumb action button) */}
+        {!isTouchDevice && (fishingState === 'IDLE' || fishingState === 'CASTING') && canFish && (
           <motion.div
             key="cast-button-container"
             initial={{ opacity: 0, y: 15 }}
@@ -124,8 +133,8 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* STATE: WAITING (Compact editorial banner) */}
-        {fishingState === 'WAITING' && (
+        {/* STATE: WAITING (Desktop banner only; mobile has compact status in thumb area) */}
+        {!isTouchDevice && fishingState === 'WAITING' && (
           <motion.div
             key="waiting-hud"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -154,8 +163,8 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* STATE: BITE (FISH ON! REEL!) */}
-        {fishingState === 'BITE' && (
+        {/* STATE: BITE (FISH ON! REEL!) (Desktop button only; mobile has thumb action button) */}
+        {!isTouchDevice && fishingState === 'BITE' && (
           <motion.div
             key="bite-hud"
             initial={{ scale: 0.85, opacity: 0 }}
@@ -177,7 +186,7 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
           </motion.div>
         )}
 
-        {/* STATE: HOOKED or REELING */}
+        {/* STATE: HOOKED or REELING (TensionGauge is visible for all; button row is desktop only) */}
         {(fishingState === 'HOOKED' || fishingState === 'REELING') && (
           <motion.div
             key="reeling-hud"
@@ -189,35 +198,37 @@ export const FishingHUD: React.FC<FishingHUDProps> = ({
             {/* Tension gauge */}
             <TensionGauge tension={lineTension} isReeling={isReeling} fishDistance={fishDistance} />
 
-            <div className="flex items-center gap-2 w-full font-mono">
-              {/* Reel Action Button */}
-              <button
-                id="btn-reel-action"
-                onPointerDown={onStartReel}
-                onPointerUp={onStopReel}
-                onPointerCancel={onStopReel}
-                className={`flex-1 py-3 sm:py-3.5 font-black text-sm sm:text-base uppercase tracking-widest border-2 sm:border-4 transition-all cursor-pointer select-none touch-none ${
-                  isReeling
-                    ? 'bg-white text-black border-white shadow-[2px_2px_0px_0px_#ffffff]'
-                    : 'bg-black text-white border-white hover:bg-[#222222] shadow-[4px_4px_0px_0px_#ffffff]'
-                }`}
-              >
-                <span>{isReeling ? 'REELING IN...' : 'HOLD TO REEL'}</span>
-                <span className="hidden sm:inline-block ml-2 text-xs border border-current px-1 py-0.5">
-                  [SPACE]
-                </span>
-              </button>
+            {!isTouchDevice && (
+              <div className="flex items-center gap-2 w-full font-mono">
+                {/* Reel Action Button */}
+                <button
+                  id="btn-reel-action"
+                  onPointerDown={onStartReel}
+                  onPointerUp={onStopReel}
+                  onPointerCancel={onStopReel}
+                  className={`flex-1 py-3 sm:py-3.5 font-black text-sm sm:text-base uppercase tracking-widest border-2 sm:border-4 transition-all cursor-pointer select-none touch-none ${
+                    isReeling
+                      ? 'bg-white text-black border-white shadow-[2px_2px_0px_0px_#ffffff]'
+                      : 'bg-black text-white border-white hover:bg-[#222222] shadow-[4px_4px_0px_0px_#ffffff]'
+                  }`}
+                >
+                  <span>{isReeling ? 'REELING IN...' : 'HOLD TO REEL'}</span>
+                  <span className="hidden sm:inline-block ml-2 text-xs border border-current px-1 py-0.5">
+                    [SPACE]
+                  </span>
+                </button>
 
-              {/* Emergency Cut Line */}
-              <button
-                id="btn-cut-line"
-                onClick={onResetToIdle}
-                title="Cut Line"
-                className="p-3 sm:p-3.5 bg-black text-white border-2 sm:border-4 border-white hover:bg-white hover:text-black transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+                {/* Emergency Cut Line */}
+                <button
+                  id="btn-cut-line"
+                  onClick={onResetToIdle}
+                  title="Cut Line"
+                  className="p-3 sm:p-3.5 bg-black text-white border-2 sm:border-4 border-white hover:bg-white hover:text-black transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 

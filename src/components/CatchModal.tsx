@@ -4,7 +4,7 @@ import confetti from 'canvas-confetti';
 import { CatchRecord, FishSpecies, SupportedLanguage } from '../types';
 import { LOCALIZATION } from '../data/localization';
 import { ThreeFishViewer } from './ThreeFishViewer';
-import { Trophy, Check, ArrowRight } from 'lucide-react';
+import { Trophy, Check, ArrowRight, X } from 'lucide-react';
 
 interface CatchModalProps {
   catchRecord: CatchRecord | null;
@@ -121,11 +121,20 @@ export const CatchModal: React.FC<CatchModalProps> = ({
               </span>
             )}
           </div>
-          <span
-            className={`px-2.5 py-0.5 text-[11px] uppercase ${style.badge} ${style.tagStyle}`}
-          >
-            {species.rarity}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2.5 py-0.5 text-[11px] uppercase ${style.badge} ${style.tagStyle}`}
+            >
+              {species.rarity}
+            </span>
+            <button
+              onClick={onKeep}
+              className="p-1 border border-current hover:bg-black hover:text-white transition-colors cursor-pointer"
+              title="Close and keep"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Big Bold Headline */}

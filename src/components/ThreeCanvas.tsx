@@ -520,26 +520,34 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
 
         // Movement is locked during active cast/fight
         if (!curPaused && !isFishingActive) {
-          let kx = 0;
-          let kz = 0;
-          if (k.w) kz -= 1;
-          if (k.s) kz += 1;
-          if (k.a) kx -= 1;
-          if (k.d) kx += 1;
+          let forwardInput = 0;
+          let rightInput = 0;
+          if (k.w) forwardInput += 1;
+          if (k.s) forwardInput -= 1;
+          if (k.d) rightInput += 1;
+          if (k.a) rightInput -= 1;
 
           // Mobile joystick input
           if (curJoy && (Math.abs(curJoy.x) > 0.05 || Math.abs(curJoy.y) > 0.05)) {
-            kx += curJoy.x;
-            kz -= curJoy.y;
+            rightInput += curJoy.x;
+            forwardInput += curJoy.y;
           }
 
-          const inputMag = Math.hypot(kx, kz);
+          const inputMag = Math.hypot(rightInput, forwardInput);
           if (inputMag > 0.05) {
             const camYaw = cameraControllerRef.current ? cameraControllerRef.current.yaw : 0;
-            const angle = Math.atan2(kx, kz) + camYaw;
+            // Camera forward and right directions projected onto horizontal plane
+            const fwdX = Math.sin(camYaw);
+            const fwdZ = -Math.cos(camYaw);
+            const rightX = Math.cos(camYaw);
+            const rightZ = Math.sin(camYaw);
+
+            const normRight = rightInput / inputMag;
+            const normFwd = forwardInput / inputMag;
             const maxSpeed = (k.shift ? 5.2 : 3.4) * Math.min(1.0, inputMag);
-            targetVel.x = Math.sin(angle) * maxSpeed;
-            targetVel.y = Math.cos(angle) * maxSpeed;
+
+            targetVel.x = (fwdX * normFwd + rightX * normRight) * maxSpeed;
+            targetVel.y = (fwdZ * normFwd + rightZ * normRight) * maxSpeed;
           }
         }
 
