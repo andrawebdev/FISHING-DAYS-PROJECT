@@ -23,6 +23,7 @@ import { getGroundInfo, resolvePlayerCollision } from './world/Collision';
 import { CameraController } from './world/CameraController';
 
 interface ThreeCanvasProps {
+  cameraMode?: 'CINEMATIC_MENU' | 'GAMEPLAY';
   fishingState: FishingState;
   castPower: number;
   lineTension: number;
@@ -62,6 +63,7 @@ const LINE_TINT_COLORS: Record<string, number> = {
 };
 
 export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
+  cameraMode = 'GAMEPLAY',
   fishingState,
   castPower,
   lineTension,
@@ -171,6 +173,12 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     isPaused,
     joystickInput,
   ]);
+
+  useEffect(() => {
+    if (cameraControllerRef.current) {
+      cameraControllerRef.current.setMode(cameraMode);
+    }
+  }, [cameraMode]);
 
   // Main 3D Life Cycle
   useEffect(() => {
@@ -302,7 +310,8 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
 
       // 5. Authoritative Camera Controller
       onLoadingProgress?.(85, 'INITIALIZING CAMERA CONTROLLER...');
-      const cameraController = new CameraController(50, width / height, 0.1, 220);
+      const cameraController = new CameraController(50, width / height, 0.2, 600);
+      cameraController.setMode(cameraMode);
       cameraController.attach(renderer.domElement);
       cameraControllerRef.current = cameraController;
 
@@ -518,8 +527,8 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
           curState === 'HOOKED' ||
           curState === 'REELING';
 
-        // Movement is locked during active cast/fight
-        if (!curPaused && !isFishingActive) {
+        // Movement is locked during active cast/fight or cinematic menu
+        if (!curPaused && !isFishingActive && cameraMode === 'GAMEPLAY') {
           let forwardInput = 0;
           let rightInput = 0;
           if (k.w) forwardInput += 1;
@@ -642,8 +651,8 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
             if (curState === 'CASTING') {
               if (playerRef.current) {
                 const tip = playerRef.current.rodTipPosition;
-                targetX = THREE.MathUtils.lerp(tip.x, anchor.x, curCastPower * 0.35);
-                targetZ = THREE.MathUtils.lerp(tip.z, anchor.z, curCastPower * 0.35);
+                targetX = tip.x;
+                targetZ = tip.z;
               }
             } else if (curState === 'REELING' || curState === 'HOOKED') {
               const initDist = Math.max(5, initialCastDistRef.current);
@@ -652,27 +661,32 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
               targetZ = THREE.MathUtils.lerp(currPos.z - 0.8, anchor.z, reelRatio);
             }
 
-            bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 8);
-            bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 8);
-
-            const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.06;
-            let bobberY = waterY + 0.05;
-
-            if (curState === 'BITE') {
-              bobberY -= 0.16 + Math.sin(elapsedTime * 22) * 0.05;
-              bg.rotation.z = Math.sin(elapsedTime * 18) * 0.3;
-              if (waterRef.current && Math.random() > 0.4) {
-                waterRef.current.addRipple(bg.position.x, bg.position.z, 1.4);
-              }
-            } else if (curState === 'HOOKED' || curState === 'REELING') {
-              bobberY -= 0.08 + Math.sin(elapsedTime * 14) * 0.04;
-              if (waterRef.current && Math.random() > 0.6) {
-                waterRef.current.addRipple(bg.position.x, bg.position.z, 0.9);
-              }
+            if (curState === 'CASTING' && playerRef.current) {
+              const tip = playerRef.current.rodTipPosition;
+              bg.position.set(tip.x, tip.y - 0.28, tip.z);
             } else {
-              bg.rotation.z = Math.sin(elapsedTime * 2) * 0.06;
+              bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 8);
+              bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 8);
+
+              const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.06;
+              let bobberY = waterY + 0.05;
+
+              if (curState === 'BITE') {
+                bobberY -= 0.16 + Math.sin(elapsedTime * 22) * 0.05;
+                bg.rotation.z = Math.sin(elapsedTime * 18) * 0.3;
+                if (waterRef.current && Math.random() > 0.4) {
+                  waterRef.current.addRipple(bg.position.x, bg.position.z, 1.4);
+                }
+              } else if (curState === 'HOOKED' || curState === 'REELING') {
+                bobberY -= 0.08 + Math.sin(elapsedTime * 14) * 0.04;
+                if (waterRef.current && Math.random() > 0.6) {
+                  waterRef.current.addRipple(bg.position.x, bg.position.z, 0.9);
+                }
+              } else {
+                bg.rotation.z = Math.sin(elapsedTime * 2) * 0.06;
+              }
+              bg.position.y = bobberY;
             }
-            bg.position.y = bobberY;
           } else {
             bg.position.set(currPos.x, currPos.y, currPos.z - 0.5);
           }
@@ -685,7 +699,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
             const positions = lineMeshRef.current.geometry.attributes.position.array as Float32Array;
             const start = playerRef.current.rodTipPosition;
             const end = bobberGroupRef.current.position;
-            const droopFactor = (1 - curTension) * 0.45;
+            const droopFactor = curState === 'CASTING' ? 0.02 : (1 - curTension) * 0.45;
 
             for (let i = 0; i < linePointsCount; i++) {
               const t = i / (linePointsCount - 1);
@@ -765,7 +779,9 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     <div
       id="three-canvas-container"
       ref={containerRef}
-      onClick={onCanvasClick}
+      onClick={() => {
+        if (cameraMode === 'GAMEPLAY' && onCanvasClick) onCanvasClick();
+      }}
       className="relative w-full h-full cursor-grab active:cursor-grabbing select-none touch-none overflow-hidden"
     />
   );

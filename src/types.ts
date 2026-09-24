@@ -1,3 +1,12 @@
+export type TopLevelGameState =
+  | 'BOOT'
+  | 'LOADING'
+  | 'MAIN_MENU'
+  | 'PLAYING'
+  | 'PAUSED'
+  | 'FISHING'
+  | 'CATCH_RESULT';
+
 export type FishingState =
   | 'IDLE'
   | 'CASTING'

@@ -4,36 +4,37 @@ export interface Obstacle {
   x: number;
   z: number;
   radius: number;
+  height?: number;
 }
 
 // Fixed world obstacles: rocks, cabin, shed, trees
 export const WORLD_OBSTACLES: Obstacle[] = [
   // Cabin footprint (stone deck & walls at x=0, z=13)
-  { x: 0, z: 13, radius: 3.8 },
+  { x: 0, z: 13, radius: 4.2, height: 4.5 },
   // Boathouse shed at x=9.5, z=11.5
-  { x: 9.5, z: 11.5, radius: 2.8 },
+  { x: 9.5, z: 11.5, radius: 3.0, height: 3.8 },
 
   // Large rocks near dock
-  { x: -4.5, z: -1.2, radius: 1.0 },
-  { x: 4.8, z: -0.5, radius: 1.1 },
-  { x: -5.2, z: 1.5, radius: 0.9 },
-  { x: 5.6, z: 2.2, radius: 0.9 },
+  { x: -4.5, z: -1.2, radius: 1.0, height: 0.9 },
+  { x: 4.8, z: -0.5, radius: 1.1, height: 0.9 },
+  { x: -5.2, z: 1.5, radius: 0.9, height: 0.8 },
+  { x: 5.6, z: 2.2, radius: 0.9, height: 0.8 },
 
   // Crate stack & barrel near dock
-  { x: -2.2, z: 4.2, radius: 0.8 },
-  { x: 2.4, z: 3.8, radius: 0.6 },
+  { x: -2.2, z: 4.2, radius: 0.8, height: 1.0 },
+  { x: 2.4, z: 3.8, radius: 0.6, height: 0.9 },
 
   // Big shoreline rocks
-  { x: -12, z: -8, radius: 1.6 },
-  { x: -18, z: -15, radius: 2.3 },
-  { x: 14, z: -10, radius: 1.8 },
-  { x: 19, z: -20, radius: 2.5 },
+  { x: -12, z: -8, radius: 1.6, height: 1.8 },
+  { x: -18, z: -15, radius: 2.3, height: 2.2 },
+  { x: 14, z: -10, radius: 1.8, height: 2.0 },
+  { x: 19, z: -20, radius: 2.5, height: 2.4 },
 
   // Trees near clearing
-  { x: -10, z: 12, radius: 1.1 },
-  { x: -14, z: 18, radius: 1.2 },
-  { x: 8, z: 20, radius: 1.1 },
-  { x: 12, z: 8, radius: 1.0 },
+  { x: -10, z: 12, radius: 1.1, height: 8.0 },
+  { x: -14, z: 18, radius: 1.2, height: 8.0 },
+  { x: 8, z: 20, radius: 1.1, height: 8.0 },
+  { x: 12, z: 8, radius: 1.0, height: 8.0 },
 ];
 
 export interface GroundInfo {

@@ -26,20 +26,23 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
           id="loading-screen"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.4, ease: 'easeInOut' }}
+          transition={{ duration: 0.45, ease: 'easeInOut' }}
           className="fixed inset-0 z-50 bg-[#000000] text-white flex flex-col items-center justify-center p-6 select-none font-mono"
         >
           {/* Maximalist Graphic Frame */}
           <div className="w-full max-w-md border-4 border-white p-6 sm:p-8 bg-[#000000] shadow-[8px_8px_0px_0px_#ffffff] flex flex-col items-center gap-6">
             {/* Title Header */}
-            <div className="flex flex-col items-center gap-1 text-center">
+            <div className="flex flex-col items-center gap-1.5 text-center">
               <span className="text-[10px] sm:text-xs tracking-[0.3em] font-black uppercase text-[#888888]">
-                INDIE 3D COZY FISHING
+                3D COZY INDIE
               </span>
               <h1 className="text-3xl sm:text-4xl font-black tracking-widest uppercase text-white">
                 FISHING DAYS
               </h1>
-              <div className="w-16 h-1 bg-white mt-1" />
+              <span className="text-[10px] sm:text-xs tracking-[0.25em] font-bold uppercase text-[#aaaaaa]">
+                FISHING & EXPLORATION
+              </span>
+              <div className="w-20 h-1 bg-white mt-1" />
             </div>
 
             {/* Error or Progress State */}
@@ -68,7 +71,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
                   <span className="truncate max-w-[240px] text-white">
                     {clampedProgress >= 100 ? 'READY' : statusText || 'LOADING...'}
                   </span>
-                  <span className="text-sm bg-white text-black px-1.5 py-0.5 ml-2 font-mono">
+                  <span className="text-sm bg-white text-black px-2 py-0.5 ml-2 font-mono">
                     {clampedProgress}%
                   </span>
                 </div>
@@ -84,7 +87,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
                 {/* Progress details indicator */}
                 <div className="flex justify-between items-center text-[10px] text-[#888888] tracking-widest uppercase mt-1">
                   <span>STAGE {clampedProgress < 25 ? '1/4' : clampedProgress < 60 ? '2/4' : clampedProgress < 90 ? '3/4' : '4/4'}</span>
-                  <span>{clampedProgress >= 100 ? 'LAUNCHING ENGINE...' : 'INITIALIZING ASSETS'}</span>
+                  <span>{clampedProgress >= 100 ? 'READY' : 'LOADING WORLD'}</span>
                 </div>
               </div>
             )}

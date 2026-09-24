@@ -252,6 +252,9 @@ export class StylizedPlayerCharacter {
     this.rodTipGroup.add(this.rodTipMarker);
 
     this.rodMidGroup.add(this.rodTipGroup);
+
+    // Authoritative initialization of idle transforms and rod tip
+    this.resetToIdle();
   }
 
   public setCustomRodColor(hex: string) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
+  TopLevelGameState,
   FishingState,
   FishSpecies,
   CatchRecord,
@@ -33,6 +34,7 @@ import { ThreeCanvas } from './components/ThreeCanvas';
 import { FishingHUD } from './components/FishingHUD';
 import { MobileControls } from './components/MobileControls';
 import { LoadingScreen } from './components/LoadingScreen';
+import { MainMenu } from './components/MainMenu';
 import { CatchModal } from './components/CatchModal';
 import { FishCollectionModal } from './components/FishCollectionModal';
 import { EnvironmentControlBar } from './components/EnvironmentControlBar';
@@ -40,6 +42,7 @@ import { TackleShopModal } from './components/TackleShopModal';
 import { GearCustomizationModal } from './components/GearCustomizationModal';
 import { PlayerCabinModal } from './components/PlayerCabinModal';
 import { DailyMissionsModal } from './components/DailyMissionsModal';
+import { RotateCw, AlertTriangle, Play, Sliders, BookOpen, Home } from 'lucide-react';
 
 export default function App() {
   // --- PLAYER PROGRESSION & INVENTORY STATE ---
@@ -366,6 +369,40 @@ export default function App() {
     }
   }, [weather, timeOfDay, soundEnabled, isPaused]);
 
+  // --- GAME STATE ARCHITECTURE ---
+  // Allowed: BOOT -> LOADING -> MAIN_MENU -> PLAYING -> PAUSED -> FISHING -> CATCH_RESULT
+  const [topLevelGameState, setTopLevelGameState] = useState<TopLevelGameState>('BOOT');
+  const [showCreditsModal, setShowCreditsModal] = useState<boolean>(false);
+  const [showPauseConfirmMenu, setShowPauseConfirmMenu] = useState<boolean>(false);
+  const [hasExistingSave, setHasExistingSave] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem('fishing_days_has_save') === 'true' ||
+        localStorage.getItem('fishing_days_catch_history') !== null ||
+        localStorage.getItem('fishing_days_coins') !== null
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  // Device orientation tracking (Landscape-first requirement)
+  const [isPortrait, setIsPortrait] = useState<boolean>(() => {
+    return typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false;
+  });
+
+  useEffect(() => {
+    const handleOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    return () => {
+      window.removeEventListener('resize', handleOrientation);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
+  }, []);
+
   // --- ENGINE LOADING PROGRESS ARCHITECTURE ---
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState('BOOTING 3D ENGINE...');
@@ -471,6 +508,7 @@ export default function App() {
       setFishingState('IDLE');
       setLineTension(0.3);
       setCastPower(0);
+      setTopLevelGameState((prev) => (prev === 'FISHING' || prev === 'CATCH_RESULT' ? 'PLAYING' : prev));
     },
     [cleanupFishingSession]
   );
@@ -591,6 +629,7 @@ export default function App() {
     catchProcessedRef.current = false;
 
     soundEngine.resume();
+    setTopLevelGameState('FISHING');
     transitionFishingState('CASTING', session, 'start charge');
     setCastPower(0.2);
 
@@ -743,6 +782,7 @@ export default function App() {
       setLastCatchRecord(record);
       transitionFishingState('CAUGHT', session, 'catch completed');
       setShowCatchModal(true);
+      setTopLevelGameState('CATCH_RESULT');
     },
     [activeFish, weather, timeOfDay, unlockedCatches, cleanupFishingSession, transitionFishingState]
   );
@@ -846,6 +886,7 @@ export default function App() {
     setFishingState('IDLE');
     setCastPower(0);
     setLineTension(0.3);
+    setTopLevelGameState('PLAYING');
   }, [lastCatchRecord, cleanupFishingSession]);
 
   const handleKeepCatch = useCallback(() => {
@@ -863,6 +904,7 @@ export default function App() {
     setFishingState('IDLE');
     setCastPower(0);
     setLineTension(0.3);
+    setTopLevelGameState('PLAYING');
   }, [lastCatchRecord, cleanupFishingSession]);
 
   // Emergency recovery for fishing system
@@ -889,6 +931,63 @@ export default function App() {
     setSoundEnabled((prev) => !prev);
   };
 
+  const handleTogglePause = useCallback(() => {
+    if (topLevelGameState === 'MAIN_MENU' || topLevelGameState === 'BOOT' || topLevelGameState === 'LOADING') return;
+
+    if (topLevelGameState === 'PAUSED') {
+      setIsPaused(false);
+      setTopLevelGameState(fishingState === 'IDLE' ? 'PLAYING' : 'FISHING');
+    } else {
+      setIsPaused(true);
+      setTopLevelGameState('PAUSED');
+    }
+  }, [topLevelGameState, fishingState]);
+
+  const handleStartNewGame = useCallback(() => {
+    setCoins(150);
+    setEquippedRodId('bamboo_starter');
+    setEquippedReelId('basic_reel');
+    setEquippedLineId('mono_starter');
+    setEquippedBaitId('bread_crumbs');
+    setEquippedLureId('surface_popper');
+    setUnlockedGearIds(['bamboo_starter', 'basic_reel', 'mono_starter']);
+    setBaitInventory({ bread_crumbs: 15, live_worms: 10, sweet_corn: 8 });
+    setCustomization(DEFAULT_GEAR_CUSTOMIZATION);
+    setCabinTheme('RUSTIC_CEDAR');
+    setDockLighting('EDISON_BULBS');
+    setMountedTrophies([]);
+    setCraftingMaterials(INITIAL_CRAFTING_MATERIALS);
+    setCatchHistory([]);
+    setUnlockedCatches({});
+    setDailyMissions(INITIAL_DAILY_MISSIONS);
+    handleResetToIdle('new game start');
+
+    try {
+      localStorage.setItem('fishing_days_has_save', 'true');
+      localStorage.setItem('fishing_days_coins', '150');
+      localStorage.setItem('fishing_days_rod', 'bamboo_starter');
+      localStorage.setItem('fishing_days_reel', 'basic_reel');
+      localStorage.setItem('fishing_days_line', 'mono_starter');
+      localStorage.setItem('fishing_days_bait', 'bread_crumbs');
+      localStorage.setItem('fishing_days_unlocked_gear', JSON.stringify(['bamboo_starter', 'basic_reel', 'mono_starter']));
+      localStorage.setItem('fishing_days_bait_inventory', JSON.stringify({ bread_crumbs: 15, live_worms: 10, sweet_corn: 8 }));
+      localStorage.setItem('fishing_days_customization', JSON.stringify(DEFAULT_GEAR_CUSTOMIZATION));
+      localStorage.setItem('fishing_days_catch_history', JSON.stringify([]));
+      localStorage.setItem('fishing_days_collection', JSON.stringify({}));
+    } catch {}
+
+    setHasExistingSave(true);
+    soundEngine.resume();
+    soundEngine.playCastWhoosh();
+    setTopLevelGameState('PLAYING');
+  }, [handleResetToIdle]);
+
+  const handleContinueGame = useCallback(() => {
+    soundEngine.resume();
+    soundEngine.playCoinDing();
+    setTopLevelGameState('PLAYING');
+  }, []);
+
   // Check if any modal is currently open
   const isAnyModalOpen =
     showCatchModal ||
@@ -896,30 +995,60 @@ export default function App() {
     showTackleShop ||
     showCustomizationModal ||
     showCabinModal ||
-    showDailyMissionsModal;
+    showDailyMissionsModal ||
+    showCreditsModal ||
+    showPauseConfirmMenu;
 
   // Keyboard accessibility
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Pause toggle: Key P
       if (e.code === 'KeyP') {
-        setIsPaused((prev) => !prev);
+        handleTogglePause();
         return;
       }
 
-      if (isPaused) return;
-
       if (e.code === 'Escape') {
+        if (showPauseConfirmMenu) {
+          setShowPauseConfirmMenu(false);
+          return;
+        }
+        if (topLevelGameState === 'PAUSED') {
+          handleTogglePause();
+          return;
+        }
+        if (showCreditsModal) {
+          setShowCreditsModal(false);
+          return;
+        }
         if (showCatchModal) {
           handleKeepCatch();
           return;
         }
-        if (showCollectionModal) setShowCollectionModal(false);
-        if (showTackleShop) setShowTackleShop(false);
-        if (showCustomizationModal) setShowCustomizationModal(false);
-        if (showCabinModal) setShowCabinModal(false);
-        if (showDailyMissionsModal) setShowDailyMissionsModal(false);
-        if (fishingState !== 'IDLE') handleResetToIdle();
+        if (showCollectionModal) {
+          setShowCollectionModal(false);
+          return;
+        }
+        if (showTackleShop) {
+          setShowTackleShop(false);
+          return;
+        }
+        if (showCustomizationModal) {
+          setShowCustomizationModal(false);
+          return;
+        }
+        if (showCabinModal) {
+          setShowCabinModal(false);
+          return;
+        }
+        if (showDailyMissionsModal) {
+          setShowDailyMissionsModal(false);
+          return;
+        }
+        if (topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING') {
+          handleTogglePause();
+          return;
+        }
         return;
       }
 
@@ -976,38 +1105,34 @@ export default function App() {
   ]);
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden bg-slate-950 select-none">
+    <main className="relative w-screen h-screen overflow-hidden bg-black select-none">
       {/* 1. LOADING SCREEN (BLACK + WHITE MAXIMALISM) */}
-      <LoadingScreen
-        progress={loadingProgress}
-        statusText={loadingStatus}
-        error={loadingError}
-        isComplete={isLoadingComplete}
-        onRetry={() => window.location.reload()}
-      />
+      {(topLevelGameState === 'BOOT' || topLevelGameState === 'LOADING' || !isLoadingComplete) && (
+        <LoadingScreen
+          progress={loadingProgress}
+          statusText={loadingStatus}
+          error={loadingError}
+          isComplete={isLoadingComplete && topLevelGameState !== 'BOOT' && topLevelGameState !== 'LOADING'}
+          onRetry={() => window.location.reload()}
+        />
+      )}
 
-      {/* 2. TOP HUD & ENVIRONMENT CONTROLS */}
-      <EnvironmentControlBar
-        weather={weather}
-        timeOfDay={timeOfDay}
-        coins={coins}
-        soundEnabled={soundEnabled}
-        language={language}
-        isPaused={isPaused}
-        dailyMissions={dailyMissions}
-        onOpenDailyMissions={() => setShowDailyMissionsModal(true)}
-        onTogglePause={() => setIsPaused((p) => !p)}
-        onCycleWeather={cycleWeather}
-        onCycleTimeOfDay={cycleTimeOfDay}
-        onToggleSound={toggleSound}
-        onOpenCollection={() => setShowCollectionModal(true)}
-        onOpenShop={() => setShowTackleShop(true)}
-        onOpenCustomization={() => setShowCustomizationModal(true)}
-        onOpenCabin={() => setShowCabinModal(true)}
-      />
+      {/* 2. MAIN MENU (BLACK + WHITE MAXIMALISM) */}
+      {topLevelGameState === 'MAIN_MENU' && (
+        <MainMenu
+          hasExistingSave={hasExistingSave}
+          weather={weather}
+          timeOfDay={timeOfDay}
+          onContinue={handleContinueGame}
+          onNewGame={handleStartNewGame}
+          onOpenEncyclopedia={() => setShowCollectionModal(true)}
+          onOpenSettings={() => setShowCustomizationModal(true)}
+        />
+      )}
 
       {/* 3. 3D WEBGL ENGINE WITH AUTHORITATIVE CAMERA CONTROLLER */}
       <ThreeCanvas
+        cameraMode={topLevelGameState === 'MAIN_MENU' ? 'CINEMATIC_MENU' : 'GAMEPLAY'}
         fishingState={fishingState}
         castPower={castPower}
         lineTension={lineTension}
@@ -1019,60 +1144,263 @@ export default function App() {
         cabinTheme={cabinTheme}
         dockLighting={dockLighting}
         mountedTrophies={mountedTrophies}
-        isPaused={isPaused}
+        isPaused={isPaused || topLevelGameState === 'PAUSED'}
         onCanFishChange={setCanFish}
         joystickInput={joystickInput}
         onLoadingProgress={(prog, step) => {
           setLoadingProgress(prog);
           setLoadingStatus(step);
+          if (topLevelGameState === 'BOOT') {
+            setTopLevelGameState('LOADING');
+          }
         }}
         onLoadingError={(err) => setLoadingError(err)}
-        onLoadingComplete={() => setIsLoadingComplete(true)}
+        onLoadingComplete={() => {
+          setLoadingProgress(100);
+          setLoadingStatus('READY');
+          window.setTimeout(() => {
+            setIsLoadingComplete(true);
+            setTopLevelGameState('MAIN_MENU');
+          }, 450);
+        }}
         cameraRotateRef={cameraRotateRef}
         onCanvasClick={() => {
-          soundEngine.resume();
-          if (fishingState === 'BITE') {
-            handleHookFish();
+          if (topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING') {
+            soundEngine.resume();
+            if (fishingState === 'BITE') {
+              handleHookFish();
+            }
           }
         }}
       />
 
-      {/* 4. DEDICATED MOBILE LANDSCAPE CONTROLS & CAMERA TOUCH ZONE */}
-      <MobileControls
-        fishingState={fishingState}
-        canFish={canFish}
-        isPaused={isPaused}
-        disabled={!isLoadingComplete || isAnyModalOpen}
-        onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
-        onCameraRotate={(deltaYaw, deltaPitch) => {
-          if (cameraRotateRef.current) {
-            cameraRotateRef.current(deltaYaw, deltaPitch);
-          }
-        }}
-        onStartCastCharge={handleStartCastCharge}
-        onReleaseCastCharge={handleReleaseCastCharge}
-        onHookFish={handleHookFish}
-        onStartReel={handleStartReel}
-        onStopReel={handleStopReel}
-        onResetToIdle={handleResetToIdle}
-      />
+      {/* 4. TOP HUD & ENVIRONMENT CONTROLS (ONLY IN ACTIVE GAMEPLAY OR PAUSE) */}
+      {(topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING' || topLevelGameState === 'PAUSED') && (
+        <EnvironmentControlBar
+          weather={weather}
+          timeOfDay={timeOfDay}
+          coins={coins}
+          soundEnabled={soundEnabled}
+          language={language}
+          isPaused={topLevelGameState === 'PAUSED'}
+          dailyMissions={dailyMissions}
+          onOpenDailyMissions={() => setShowDailyMissionsModal(true)}
+          onTogglePause={handleTogglePause}
+          onCycleWeather={cycleWeather}
+          onCycleTimeOfDay={cycleTimeOfDay}
+          onToggleSound={toggleSound}
+          onOpenCollection={() => setShowCollectionModal(true)}
+          onOpenShop={() => setShowTackleShop(true)}
+          onOpenCustomization={() => setShowCustomizationModal(true)}
+          onOpenCabin={() => setShowCabinModal(true)}
+        />
+      )}
 
-      {/* 5. FISHING ACTION CONTROLS & HUD */}
-      <FishingHUD
-        fishingState={fishingState}
-        castPower={castPower}
-        lineTension={lineTension}
-        fishDistance={fishDistance}
-        isReeling={isReeling}
-        canFish={canFish}
-        language={language}
-        onStartCastCharge={handleStartCastCharge}
-        onReleaseCastCharge={handleReleaseCastCharge}
-        onHookFish={handleHookFish}
-        onStartReel={handleStartReel}
-        onStopReel={handleStopReel}
-        onResetToIdle={handleResetToIdle}
-      />
+      {/* 5. DEDICATED MOBILE LANDSCAPE CONTROLS & CAMERA TOUCH ZONE */}
+      {(topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING') && !isAnyModalOpen && (
+        <MobileControls
+          fishingState={fishingState}
+          canFish={canFish}
+          isPaused={false}
+          disabled={!isLoadingComplete || isAnyModalOpen}
+          onMove={(dx, dy) => setJoystickInput({ x: dx, y: dy })}
+          onCameraRotate={(deltaYaw, deltaPitch) => {
+            if (cameraRotateRef.current) {
+              cameraRotateRef.current(deltaYaw, deltaPitch);
+            }
+          }}
+          onStartCastCharge={handleStartCastCharge}
+          onReleaseCastCharge={handleReleaseCastCharge}
+          onHookFish={handleHookFish}
+          onStartReel={handleStartReel}
+          onStopReel={handleStopReel}
+          onResetToIdle={handleResetToIdle}
+        />
+      )}
+
+      {/* 6. FISHING ACTION CONTROLS & HUD */}
+      {(topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING') && !isAnyModalOpen && (
+        <FishingHUD
+          fishingState={fishingState}
+          castPower={castPower}
+          lineTension={lineTension}
+          fishDistance={fishDistance}
+          isReeling={isReeling}
+          canFish={canFish}
+          language={language}
+          onStartCastCharge={handleStartCastCharge}
+          onReleaseCastCharge={handleReleaseCastCharge}
+          onHookFish={handleHookFish}
+          onStartReel={handleStartReel}
+          onStopReel={handleStopReel}
+          onResetToIdle={handleResetToIdle}
+        />
+      )}
+
+      {/* 7. PAUSE MENU (BLACK + WHITE MAXIMALISM) */}
+      {topLevelGameState === 'PAUSED' && (
+        <div
+          id="pause-menu-modal"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm text-white flex flex-col items-center justify-center p-6 select-none font-mono"
+        >
+          <div className="w-full max-w-sm border-4 border-white bg-black p-6 sm:p-8 shadow-[8px_8px_0px_0px_#ffffff] flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <span className="text-[10px] tracking-[0.3em] font-black uppercase text-[#888888]">
+                GAME SUSPENDED
+              </span>
+              <h2 className="text-3xl font-black uppercase tracking-widest text-white">PAUSED</h2>
+              <div className="w-16 h-1 bg-white mt-1" />
+            </div>
+
+            <div className="w-full flex flex-col gap-3">
+              <button
+                id="btn-pause-resume"
+                onClick={() => {
+                  setIsPaused(false);
+                  setTopLevelGameState(fishingState === 'IDLE' ? 'PLAYING' : 'FISHING');
+                }}
+                className="w-full py-3 bg-white text-black font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-black hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2 shadow-[4px_4px_0px_0px_#ffffff]"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                <span>RESUME</span>
+              </button>
+
+              <button
+                id="btn-pause-gear"
+                onClick={() => setShowCustomizationModal(true)}
+                className="w-full py-2.5 bg-black text-white font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-white hover:text-black transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sliders className="w-4 h-4" />
+                <span>SETTINGS & GEAR</span>
+              </button>
+
+              <button
+                id="btn-pause-encyclopedia"
+                onClick={() => setShowCollectionModal(true)}
+                className="w-full py-2.5 bg-black text-white font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-white hover:text-black transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>FISH ENCYCLOPEDIA</span>
+              </button>
+
+              <button
+                id="btn-pause-main-menu"
+                onClick={() => setShowPauseConfirmMenu(true)}
+                className="w-full py-2.5 bg-black text-[#aaaaaa] hover:text-white font-black text-xs uppercase tracking-widest border-2 border-[#555555] hover:border-white transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+              >
+                <Home className="w-4 h-4" />
+                <span>RETURN TO MAIN MENU</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. PAUSE RETURN CONFIRMATION MODAL */}
+      {showPauseConfirmMenu && (
+        <div
+          id="pause-confirm-menu-modal"
+          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md text-white flex flex-col items-center justify-center p-6 select-none font-mono"
+        >
+          <div className="w-full max-w-sm border-4 border-white bg-black p-6 sm:p-8 shadow-[8px_8px_0px_0px_#ffffff] flex flex-col items-center gap-6 text-center">
+            <div className="flex flex-col items-center gap-2">
+              <AlertTriangle className="w-8 h-8 text-white" />
+              <h3 className="text-base sm:text-lg font-black uppercase tracking-wider">
+                RETURN TO MAIN MENU?
+              </h3>
+              <p className="text-xs text-[#888888] uppercase tracking-wider leading-relaxed">
+                UNSAVED ACTIVE PROGRESS MAY BE LOST.
+              </p>
+            </div>
+            <div className="w-full grid grid-cols-2 gap-3">
+              <button
+                id="btn-cancel-return-menu"
+                onClick={() => setShowPauseConfirmMenu(false)}
+                className="py-2.5 bg-black text-white font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-white hover:text-black transition-all cursor-pointer"
+              >
+                CANCEL
+              </button>
+              <button
+                id="btn-confirm-return-menu"
+                onClick={() => {
+                  setShowPauseConfirmMenu(false);
+                  handleResetToIdle('return to main menu');
+                  setIsPaused(false);
+                  setTopLevelGameState('MAIN_MENU');
+                }}
+                className="py-2.5 bg-white text-black font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-black hover:text-white transition-all cursor-pointer shadow-[4px_4px_0px_0px_#ffffff]"
+              >
+                MAIN MENU
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. LANDSCAPE ORIENTATION WARNING */}
+      {isPortrait && (
+        <div
+          id="portrait-orientation-lock"
+          className="fixed inset-0 z-70 bg-[#000000] text-white flex flex-col items-center justify-center p-6 sm:p-8 text-center select-none font-mono"
+        >
+          <div className="w-full max-w-sm border-4 border-white p-6 sm:p-8 bg-black shadow-[8px_8px_0px_0px_#ffffff] flex flex-col items-center gap-4">
+            <RotateCw className="w-12 h-12 text-white animate-spin" style={{ animationDuration: '4s' }} />
+            <h2 className="text-xl sm:text-2xl font-black uppercase tracking-wider">
+              ROTATE YOUR DEVICE
+            </h2>
+            <div className="w-16 h-1 bg-white" />
+            <p className="text-xs text-[#aaaaaa] leading-relaxed uppercase tracking-wider">
+              FISHING DAYS WORKS IN LANDSCAPE MODE.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 10. CREDITS MODAL */}
+      {showCreditsModal && (
+        <div
+          id="credits-modal"
+          className="fixed inset-0 z-60 bg-black/85 backdrop-blur-sm text-white flex flex-col items-center justify-center p-6 select-none font-mono"
+        >
+          <div className="w-full max-w-md border-4 border-white bg-black p-6 sm:p-8 shadow-[8px_8px_0px_0px_#ffffff] flex flex-col items-center gap-6">
+            <div className="text-center flex flex-col items-center gap-1">
+              <span className="text-[10px] tracking-[0.3em] font-black uppercase text-[#888888]">
+                FISHING DAYS
+              </span>
+              <h2 className="text-2xl font-black uppercase tracking-widest text-white">CREDITS</h2>
+              <p className="text-[11px] text-[#888888] uppercase tracking-widest">
+                3D COZY INDIE FISHING & EXPLORATION
+              </p>
+              <div className="w-16 h-1 bg-white mt-1" />
+            </div>
+            <div className="w-full flex flex-col gap-3 text-xs uppercase text-[#cccccc] leading-relaxed">
+              <div className="flex justify-between border-b border-[#333333] pb-1.5">
+                <span className="text-[#888888]">DESIGN & CODE</span>
+                <span className="font-bold text-white">INDIE ANGLER LABS</span>
+              </div>
+              <div className="flex justify-between border-b border-[#333333] pb-1.5">
+                <span className="text-[#888888]">ENGINE</span>
+                <span className="font-bold text-white">THREE.JS WEBGL</span>
+              </div>
+              <div className="flex justify-between border-b border-[#333333] pb-1.5">
+                <span className="text-[#888888]">AUDIO</span>
+                <span className="font-bold text-white">PROCEDURAL WEBAUDIO</span>
+              </div>
+              <div className="flex justify-between border-b border-[#333333] pb-1.5">
+                <span className="text-[#888888]">STYLE</span>
+                <span className="font-bold text-white">BLACK + WHITE MAXIMALISM</span>
+              </div>
+            </div>
+            <button
+              id="btn-close-credits"
+              onClick={() => setShowCreditsModal(false)}
+              className="w-full py-2.5 bg-white text-black font-black text-xs uppercase tracking-widest border-2 border-white hover:bg-black hover:text-white transition-all cursor-pointer shadow-[4px_4px_0px_0px_#ffffff]"
+            >
+              CLOSE
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 5. CATCH SUCCESS MODAL */}
       {showCatchModal && (
