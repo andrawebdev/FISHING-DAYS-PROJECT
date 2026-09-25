@@ -25,6 +25,7 @@ import { CameraController } from './world/CameraController';
 interface ThreeCanvasProps {
   cameraMode?: 'CINEMATIC_MENU' | 'GAMEPLAY';
   fishingState: FishingState;
+  isCastCharging?: boolean;
   castPower: number;
   lineTension: number;
   fishDistance: number;
@@ -40,6 +41,7 @@ interface ThreeCanvasProps {
   onPlayerPositionChange?: (pos: [number, number, number]) => void;
   joystickInput?: { x: number; y: number };
   onCanvasClick?: () => void;
+  onCastLanded?: (landingDistance: number) => void;
   onLoadingProgress?: (progress: number, stepName: string) => void;
   onLoadingError?: (error: string) => void;
   onLoadingComplete?: () => void;
@@ -65,6 +67,7 @@ const LINE_TINT_COLORS: Record<string, number> = {
 export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   cameraMode = 'GAMEPLAY',
   fishingState,
+  isCastCharging = false,
   castPower,
   lineTension,
   fishDistance,
@@ -80,6 +83,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   onPlayerPositionChange,
   joystickInput,
   onCanvasClick,
+  onCastLanded,
   onLoadingProgress,
   onLoadingError,
   onLoadingComplete,
@@ -112,9 +116,23 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   const playerRotYRef = useRef<number>(Math.PI);
   const velocityRef = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
 
-  // Bobber water anchor
+  // Bobber & Casting Kinematics (WORLD SPACE)
+  const bobberPosRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.05, -12));
   const bobberAnchorRef = useRef<THREE.Vector3>(new THREE.Vector3(0, 0.05, -12));
   const initialCastDistRef = useRef<number>(14);
+  const castFlightRef = useRef<{
+    active: boolean;
+    progress: number;
+    duration: number;
+    launchPos: THREE.Vector3;
+    targetPos: THREE.Vector3;
+  }>({
+    active: false,
+    progress: 0,
+    duration: 0.65,
+    launchPos: new THREE.Vector3(),
+    targetPos: new THREE.Vector3(),
+  });
 
   // Desktop keyboard movement keys
   const keysRef = useRef<{ w: boolean; a: boolean; s: boolean; d: boolean; shift: boolean }>({
@@ -128,6 +146,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
   // State mirror for 60fps render loop
   const stateRef = useRef({
     fishingState,
+    isCastCharging,
     castPower,
     lineTension,
     fishDistance,
@@ -140,11 +159,13 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     mountedTrophies,
     isPaused,
     joystickInput,
+    onCastLanded,
   });
 
   useEffect(() => {
     stateRef.current = {
       fishingState,
+      isCastCharging,
       castPower,
       lineTension,
       fishDistance,
@@ -157,9 +178,11 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       mountedTrophies,
       isPaused,
       joystickInput,
+      onCastLanded,
     };
   }, [
     fishingState,
+    isCastCharging,
     castPower,
     lineTension,
     fishDistance,
@@ -172,6 +195,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
     mountedTrophies,
     isPaused,
     joystickInput,
+    onCastLanded,
   ]);
 
   useEffect(() => {
@@ -327,36 +351,43 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
       const bobberGroup = new THREE.Group();
       bobberGroup.position.set(0, 0.08, -12);
       bobberGroup.visible = false;
+      bobberGroup.frustumCulled = false;
 
       const bobberTop = new THREE.Mesh(
         new THREE.SphereGeometry(0.12, 12, 12, 0, Math.PI * 2, 0, Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 })
       );
+      bobberTop.frustumCulled = false;
       const bobberBottom = new THREE.Mesh(
         new THREE.SphereGeometry(0.12, 12, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
       );
+      bobberBottom.frustumCulled = false;
       const bobberAntenna = new THREE.Mesh(
         new THREE.CylinderGeometry(0.015, 0.015, 0.22, 6),
         new THREE.MeshBasicMaterial({ color: 0xfacc15 })
       );
       bobberAntenna.position.y = 0.16;
+      bobberAntenna.frustumCulled = false;
       bobberGroup.add(bobberTop);
       bobberGroup.add(bobberBottom);
       bobberGroup.add(bobberAntenna);
       scene.add(bobberGroup);
       bobberGroupRef.current = bobberGroup;
 
+      const linePointsCount = 28;
       const lineGeo = new THREE.BufferGeometry();
-      const linePointsCount = 20;
       const linePositions = new Float32Array(linePointsCount * 3);
       lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
       const lineMat = new THREE.LineBasicMaterial({
         color: LINE_TINT_COLORS[customization.lineTint] || 0xffffff,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.95,
+        depthTest: true,
+        depthWrite: false,
       });
       const lineMesh = new THREE.Line(lineGeo, lineMat);
+      lineMesh.frustumCulled = false;
       lineMesh.visible = false;
       scene.add(lineMesh);
       lineMeshRef.current = lineMesh;
@@ -452,6 +483,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
 
         const {
           fishingState: curState,
+          isCastCharging: curIsCastCharging,
           castPower: curCastPower,
           lineTension: curTension,
           fishDistance: curDist,
@@ -461,6 +493,7 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
           cabinTheme: curCabinTheme,
           isPaused: curPaused,
           joystickInput: curJoy,
+          onCastLanded: curOnCastLanded,
         } = stateRef.current;
 
         if (!curPaused) {
@@ -609,110 +642,199 @@ export const ThreeCanvas: React.FC<ThreeCanvasProps> = ({
             elapsedTime,
             delta,
             isWalking,
-            currentSpeed / 3.4
+            currentSpeed / 3.4,
+            curIsCastCharging
           );
         }
 
-        // Deterministic Bobber Position
-        if (curState === 'CASTING') {
-          const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            playerRotYRef.current
-          );
-          const castDist = Math.max(7, curDist);
-          let targetX = currPos.x + forward.x * castDist;
-          let targetZ = currPos.z + forward.z * castDist;
+        // Authoritative RodTip World Position (guaranteed up-to-date matrix)
+        const rodTipWorld = playerRef.current
+          ? playerRef.current.getRodTipWorldPosition()
+          : new THREE.Vector3(currPos.x, currPos.y + 1.2, currPos.z - 0.5);
 
-          // Water basin constraints: z <= -3.8
-          if (targetZ > -3.8) targetZ = -4.2;
-          targetX = Math.max(-26, Math.min(26, targetX));
-          targetZ = Math.max(-36, Math.min(-3.8, targetZ));
-
-          const tHeight = getTerrainHeight(targetX, targetZ);
-          if (tHeight >= 0.0) {
-            targetZ = Math.min(-8.0, targetZ);
-            targetX = targetX * 0.6;
-          }
-
-          bobberAnchorRef.current.set(targetX, 0.05, targetZ);
-          initialCastDistRef.current = Math.max(6, Math.hypot(targetX - currPos.x, targetZ - currPos.z));
-        }
-
-        // Bobber kinematics
+        // Bobber State Machine & Kinematics (WORLD SPACE)
         if (bobberGroupRef.current) {
           const bg = bobberGroupRef.current;
           bg.visible = isFishingActive;
 
           if (isFishingActive) {
-            const anchor = bobberAnchorRef.current;
-            let targetX = anchor.x;
-            let targetZ = anchor.z;
-
             if (curState === 'CASTING') {
-              if (playerRef.current) {
-                const tip = playerRef.current.rodTipPosition;
-                targetX = tip.x;
-                targetZ = tip.z;
+              if (curIsCastCharging) {
+                // PHASE 1: CHARGING CAST (player pulls rod back, bobber hangs from rod tip)
+                const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+                  new THREE.Vector3(0, 1, 0),
+                  playerRotYRef.current
+                );
+                const estimatedCastDist = Math.max(7, 8 + curCastPower * 14 * (1 + equippedRod.castDistanceBonus / 100));
+                let targetX = currPos.x + forward.x * estimatedCastDist;
+                let targetZ = currPos.z + forward.z * estimatedCastDist;
+
+                if (targetZ > -3.8) targetZ = -4.2;
+                targetX = Math.max(-26, Math.min(26, targetX));
+                targetZ = Math.max(-36, Math.min(-3.8, targetZ));
+                const tHeight = getTerrainHeight(targetX, targetZ);
+                if (tHeight >= 0.0) {
+                  targetZ = Math.min(-8.0, targetZ);
+                  targetX = targetX * 0.6;
+                }
+
+                bobberAnchorRef.current.set(targetX, 0.05, targetZ);
+                initialCastDistRef.current = Math.max(6, Math.hypot(targetX - currPos.x, targetZ - currPos.z));
+
+                // Bobber hangs naturally below rod tip with subtle breeze sway
+                const swing = Math.sin(elapsedTime * 6) * 0.04;
+                bobberPosRef.current.set(rodTipWorld.x + swing, rodTipWorld.y - 0.28, rodTipWorld.z);
+                bg.rotation.set(0, 0, swing * 2);
+
+                castFlightRef.current.active = false;
+                castFlightRef.current.progress = 0;
+              } else {
+                // PHASE 2: RELEASE & FLIGHT (rod whips forward, bobber launches from rod tip)
+                const flight = castFlightRef.current;
+                if (!flight.active) {
+                  flight.active = true;
+                  flight.progress = 0;
+                  const dist = currPos.distanceTo(bobberAnchorRef.current);
+                  flight.duration = Math.max(0.55, Math.min(0.85, dist * 0.04 + 0.45));
+                  flight.launchPos.copy(rodTipWorld);
+                  flight.targetPos.copy(bobberAnchorRef.current);
+                  initialCastDistRef.current = dist;
+                }
+
+                flight.progress += delta / flight.duration;
+                const t = Math.min(1.0, flight.progress);
+
+                // Believable parabolic ballistic trajectory
+                const curX = THREE.MathUtils.lerp(flight.launchPos.x, flight.targetPos.x, t);
+                const curZ = THREE.MathUtils.lerp(flight.launchPos.z, flight.targetPos.z, t);
+                const arcHeight = Math.max(2.2, Math.min(5.2, initialCastDistRef.current * 0.22));
+                const curY =
+                  THREE.MathUtils.lerp(flight.launchPos.y, flight.targetPos.y, t) +
+                  4.0 * t * (1.0 - t) * arcHeight;
+
+                bobberPosRef.current.set(curX, curY, curZ);
+
+                // Bobber pitches along the ballistic arc
+                bg.rotation.x = -Math.PI / 4 + t * (Math.PI / 2);
+                bg.rotation.z = Math.sin(t * Math.PI) * 0.25;
+
+                if (flight.progress >= 1.0) {
+                  // PHASE 3: WATER LANDING
+                  flight.active = false;
+                  bobberPosRef.current.copy(flight.targetPos);
+                  bg.rotation.set(0, 0, 0);
+
+                  if (waterRef.current) {
+                    waterRef.current.addRipple(flight.targetPos.x, flight.targetPos.z, 2.2);
+                  }
+                  if (curOnCastLanded) {
+                    curOnCastLanded(initialCastDistRef.current);
+                  }
+                }
               }
-            } else if (curState === 'REELING' || curState === 'HOOKED') {
+            } else if (curState === 'WAITING') {
+              castFlightRef.current.active = false;
+              // FLOATING on water surface
+              const anchor = bobberAnchorRef.current;
+              const waterWave = Math.sin(anchor.x * 0.18 + elapsedTime * 1.5) * 0.05;
+              bobberPosRef.current.x = anchor.x;
+              bobberPosRef.current.z = anchor.z;
+              bobberPosRef.current.y = waterWave + 0.05;
+              bg.rotation.set(Math.sin(elapsedTime * 1.5) * 0.04, 0, Math.sin(elapsedTime * 2) * 0.06);
+            } else if (curState === 'BITE') {
+              // NIBBLE / BITE: Sudden sharp downward dips & water ripples
+              const anchor = bobberAnchorRef.current;
+              const biteJolt = Math.sin(elapsedTime * 26) * 0.05;
+              const dip = -0.16 + biteJolt;
+
+              bobberPosRef.current.x = anchor.x + Math.sin(elapsedTime * 20) * 0.08;
+              bobberPosRef.current.z = anchor.z + Math.cos(elapsedTime * 20) * 0.08;
+              bobberPosRef.current.y = 0.05 + dip;
+              bg.rotation.set(biteJolt * 3, 0, Math.sin(elapsedTime * 22) * 0.35);
+
+              if (waterRef.current && Math.random() > 0.4) {
+                waterRef.current.addRipple(bobberPosRef.current.x, bobberPosRef.current.z, 1.4);
+              }
+            } else if (curState === 'HOOKED' || curState === 'REELING') {
+              // HOOKED & REELING: Fish struggle + Reel in towards dock/player
+              const anchor = bobberAnchorRef.current;
               const initDist = Math.max(5, initialCastDistRef.current);
               const reelRatio = Math.max(0, Math.min(1.0, curDist / initDist));
-              targetX = THREE.MathUtils.lerp(currPos.x, anchor.x, reelRatio);
-              targetZ = THREE.MathUtils.lerp(currPos.z - 0.8, anchor.z, reelRatio);
-            }
 
-            if (curState === 'CASTING' && playerRef.current) {
-              const tip = playerRef.current.rodTipPosition;
-              bg.position.set(tip.x, tip.y - 0.28, tip.z);
-            } else {
-              bg.position.x = THREE.MathUtils.lerp(bg.position.x, targetX, delta * 8);
-              bg.position.z = THREE.MathUtils.lerp(bg.position.z, targetZ, delta * 8);
+              const dockEdgeX = currPos.x;
+              const dockEdgeZ = currPos.z - 0.9;
+              const baseX = THREE.MathUtils.lerp(dockEdgeX, anchor.x, reelRatio);
+              const baseZ = THREE.MathUtils.lerp(dockEdgeZ, anchor.z, reelRatio);
 
-              const waterY = Math.sin(bg.position.x * 0.18 + elapsedTime * 1.5) * 0.06;
-              let bobberY = waterY + 0.05;
+              // Lateral fish swimming struggle
+              const struggleSpeed = curState === 'REELING' ? 4.2 : 2.4;
+              const struggleAmp = Math.min(2.4, curDist * 0.16);
+              const lateralX = Math.sin(elapsedTime * struggleSpeed) * struggleAmp;
+              const lateralZ = Math.cos(elapsedTime * struggleSpeed * 0.7) * (struggleAmp * 0.45);
 
-              if (curState === 'BITE') {
-                bobberY -= 0.16 + Math.sin(elapsedTime * 22) * 0.05;
-                bg.rotation.z = Math.sin(elapsedTime * 18) * 0.3;
-                if (waterRef.current && Math.random() > 0.4) {
-                  waterRef.current.addRipple(bg.position.x, bg.position.z, 1.4);
-                }
-              } else if (curState === 'HOOKED' || curState === 'REELING') {
-                bobberY -= 0.08 + Math.sin(elapsedTime * 14) * 0.04;
-                if (waterRef.current && Math.random() > 0.6) {
-                  waterRef.current.addRipple(bg.position.x, bg.position.z, 0.9);
-                }
-              } else {
-                bg.rotation.z = Math.sin(elapsedTime * 2) * 0.06;
+              const targetX = baseX + lateralX;
+              const targetZ = baseZ + lateralZ;
+
+              bobberPosRef.current.x = THREE.MathUtils.lerp(bobberPosRef.current.x, targetX, delta * 12);
+              bobberPosRef.current.z = THREE.MathUtils.lerp(bobberPosRef.current.z, targetZ, delta * 12);
+
+              // Submerged depth under tension
+              const submergedDepth = -0.09 - curTension * 0.11 + Math.sin(elapsedTime * 14) * 0.035;
+              bobberPosRef.current.y = submergedDepth;
+              bg.rotation.set(Math.sin(elapsedTime * 12) * 0.2, 0, Math.cos(elapsedTime * 9) * 0.2);
+
+              if (waterRef.current && Math.random() > 0.5) {
+                waterRef.current.addRipple(bobberPosRef.current.x, bobberPosRef.current.z, 0.9);
               }
-              bg.position.y = bobberY;
             }
+
+            bg.position.copy(bobberPosRef.current);
           } else {
-            bg.position.set(currPos.x, currPos.y, currPos.z - 0.5);
+            // DESPAWNED when not fishing
+            bg.position.set(currPos.x, currPos.y - 10, currPos.z);
           }
         }
 
-        // Fishing Line Mesh (Attached from player rod tip to bobber)
+        // Fishing Line Update (WORLD SPACE: RodTip -> Bobber)
         if (lineMeshRef.current) {
           lineMeshRef.current.visible = isFishingActive;
-          if (isFishingActive && bobberGroupRef.current && playerRef.current) {
+          if (isFishingActive && bobberGroupRef.current) {
             const positions = lineMeshRef.current.geometry.attributes.position.array as Float32Array;
-            const start = playerRef.current.rodTipPosition;
-            const end = bobberGroupRef.current.position;
-            const droopFactor = curState === 'CASTING' ? 0.02 : (1 - curTension) * 0.45;
+            const start = rodTipWorld;
+            const end = bobberPosRef.current;
+            const lineDist = start.distanceTo(end);
+
+            // Natural droop responding to state, distance and tension
+            let droop = 0.03;
+            if (curState === 'WAITING') {
+              droop = Math.min(1.1, lineDist * 0.065) * (1.0 - curTension * 0.75);
+            } else if (curState === 'HOOKED' || curState === 'REELING') {
+              droop = Math.max(0.015, Math.min(0.2, lineDist * 0.02) * (1.0 - curTension * 0.85));
+            } else if (curState === 'BITE') {
+              droop = Math.min(0.3, lineDist * 0.035);
+            } else if (curState === 'CASTING') {
+              droop = curIsCastCharging ? 0.05 : 0.02;
+            }
+
+            const tensionVibe =
+              (curState === 'HOOKED' || curState === 'REELING')
+                ? Math.sin(elapsedTime * 36) * 0.016 * curTension
+                : 0;
 
             for (let i = 0; i < linePointsCount; i++) {
               const t = i / (linePointsCount - 1);
               const px = THREE.MathUtils.lerp(start.x, end.x, t);
               const pz = THREE.MathUtils.lerp(start.z, end.z, t);
-              const sag = Math.sin(t * Math.PI) * droopFactor;
-              const py = THREE.MathUtils.lerp(start.y, end.y, t) - sag;
+              const sag = 4.0 * t * (1.0 - t) * droop;
+              const py = THREE.MathUtils.lerp(start.y, end.y, t) - sag + Math.sin(t * Math.PI) * tensionVibe;
 
               positions[i * 3] = px;
               positions[i * 3 + 1] = py;
               positions[i * 3 + 2] = pz;
             }
+
             lineMeshRef.current.geometry.attributes.position.needsUpdate = true;
+            lineMeshRef.current.geometry.computeBoundingSphere();
           }
         }
 

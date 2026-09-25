@@ -193,6 +193,7 @@ export default function App() {
   const [fishingState, setFishingState] = useState<FishingState>('IDLE');
   const [canFish, setCanFish] = useState<boolean>(true);
   const [castPower, setCastPower] = useState<number>(0);
+  const [isCastCharging, setIsCastCharging] = useState<boolean>(false);
   const [lineTension, setLineTension] = useState<number>(0.3);
   const [fishDistance, setFishDistance] = useState<number>(14);
   const [isReeling, setIsReeling] = useState<boolean>(false);
@@ -448,6 +449,7 @@ export default function App() {
     isHookingRef.current = false;
     isCastingRef.current = false;
     catchProcessedRef.current = false;
+    setIsCastCharging(false);
 
     // Reset rod/line state variables to defaults
     setLineTension(0.3);
@@ -629,6 +631,7 @@ export default function App() {
     catchProcessedRef.current = false;
 
     soundEngine.resume();
+    setIsCastCharging(true);
     setTopLevelGameState('FISHING');
     transitionFishingState('CASTING', session, 'start charge');
     setCastPower(0.2);
@@ -652,6 +655,26 @@ export default function App() {
     }, 40);
   }, [fishingState, canFish, isPaused, cleanupFishingSession, transitionFishingState]);
 
+  const handleCastLanded = useCallback(
+    (landingDistance: number) => {
+      const session = activeSessionIdRef.current;
+      if (fishingState !== 'CASTING') return;
+      if (castLandingTimerRef.current) {
+        clearTimeout(castLandingTimerRef.current);
+        castLandingTimerRef.current = null;
+      }
+      isCastingRef.current = false;
+      setIsCastCharging(false);
+      soundEngine.playBobberSplash();
+      setFishDistance(landingDistance);
+      transitionFishingState('WAITING', session, 'bobber splash down');
+      setLineTension(0.35);
+
+      scheduleFishApproach(session);
+    },
+    [fishingState, transitionFishingState, scheduleFishApproach]
+  );
+
   const handleReleaseCastCharge = useCallback(() => {
     if (castChargeTimerRef.current) {
       clearInterval(castChargeTimerRef.current);
@@ -661,23 +684,21 @@ export default function App() {
     const session = activeSessionIdRef.current;
     if (fishingState !== 'CASTING' || !canFish || isCastingRef.current) return;
     isCastingRef.current = true;
+    setIsCastCharging(false);
 
     soundEngine.playCastWhoosh();
 
     const maxCast = 8 + castPower * 14 * (1 + equippedRod.castDistanceBonus / 100);
     setFishDistance(maxCast);
 
-    // Bobber lands in water after 650ms
+    // Backup safety timer in case 3D landing callback is interrupted by window blur
     castLandingTimerRef.current = window.setTimeout(() => {
       if (activeSessionIdRef.current !== session) return;
-      isCastingRef.current = false;
-      soundEngine.playBobberSplash();
-      transitionFishingState('WAITING', session, 'bobber splash down');
-      setLineTension(0.35);
-
-      scheduleFishApproach(session);
-    }, 650);
-  }, [fishingState, canFish, castPower, equippedRod, transitionFishingState, scheduleFishApproach]);
+      if (fishingState === 'CASTING') {
+        handleCastLanded(maxCast);
+      }
+    }, 1200);
+  }, [fishingState, canFish, castPower, equippedRod, handleCastLanded]);
 
   // --- HOOKING & FIGHT REELING ---
   const handleHookFish = useCallback(() => {
@@ -1134,6 +1155,7 @@ export default function App() {
       <ThreeCanvas
         cameraMode={topLevelGameState === 'MAIN_MENU' ? 'CINEMATIC_MENU' : 'GAMEPLAY'}
         fishingState={fishingState}
+        isCastCharging={isCastCharging}
         castPower={castPower}
         lineTension={lineTension}
         fishDistance={fishDistance}
@@ -1146,6 +1168,7 @@ export default function App() {
         mountedTrophies={mountedTrophies}
         isPaused={isPaused || topLevelGameState === 'PAUSED'}
         onCanFishChange={setCanFish}
+        onCastLanded={handleCastLanded}
         joystickInput={joystickInput}
         onLoadingProgress={(prog, step) => {
           setLoadingProgress(prog);

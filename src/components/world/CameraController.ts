@@ -29,10 +29,10 @@ export class CameraController {
   private readonly maxPitch = 0.872;
 
   // Camera distances
-  private baseDistance = 4.8;
-  private targetDistance = 4.8;
-  private currentDistance = 4.8;
-  private readonly minSafeDistance = 2.4;
+  private baseDistance = 5.0;
+  private targetDistance = 5.0;
+  private currentDistance = 5.0;
+  private readonly minSafeDistance = 2.85;
 
   // Tracking targets
   private smoothedLookAt = new THREE.Vector3(0, 1.25, 1.0);
@@ -164,10 +164,10 @@ export class CameraController {
   private handleWheel(e: WheelEvent) {
     if (this.mode === 'CINEMATIC_MENU') return;
     const zoomDelta = Math.sign(e.deltaY) * 0.3;
-    const minD = this.isFishing ? 3.6 : 4.0;
-    const maxD = this.isFishing ? 5.2 : 6.5;
+    const minD = 4.2;
+    const maxD = 6.8;
     this.baseDistance = Math.max(minD, Math.min(maxD, this.baseDistance + zoomDelta));
-    this.targetDistance = this.isFishing ? this.baseDistance * 0.85 : this.baseDistance;
+    this.targetDistance = this.isFishing ? Math.max(5.0, this.baseDistance) : this.baseDistance;
   }
 
   /**
@@ -181,10 +181,11 @@ export class CameraController {
 
   /**
    * Adapts distance when player enters or leaves active fishing stance.
+   * Maintains comfortable third-person framing of player + rod + line + bobber without abrupt snaps.
    */
   public setFishingMode(fishing: boolean) {
     this.isFishing = fishing;
-    this.targetDistance = fishing ? 4.0 : this.baseDistance;
+    this.targetDistance = fishing ? Math.max(5.0, this.baseDistance) : this.baseDistance;
   }
 
   /**

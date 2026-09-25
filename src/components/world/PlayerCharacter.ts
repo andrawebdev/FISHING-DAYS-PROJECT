@@ -279,7 +279,8 @@ export class StylizedPlayerCharacter {
     time: number,
     delta: number,
     isMoving = false,
-    moveSpeedRatio = 0
+    moveSpeedRatio = 0,
+    isCastCharging = false
   ) {
     // 1. Organic Idle & Breathing
     const idleBreath = Math.sin(time * 2.2) * 0.018;
@@ -364,26 +365,47 @@ export class StylizedPlayerCharacter {
         midBend = 0.04;
         tipBend = 0.06;
       } else if (state === 'CASTING') {
-        // Wind-up and release arc
-        const prepAngle = -0.4 - castPower * 1.0;
-        this.rightArmGroup.rotation.x = prepAngle;
-        this.rightArmGroup.rotation.y = -0.1;
-        this.rightArmGroup.rotation.z = 0.35;
+        if (isCastCharging) {
+          // Wind-up: player leans back, rod cocked over shoulder
+          const prepAngle = -0.4 - castPower * 1.0;
+          this.rightArmGroup.rotation.x = prepAngle;
+          this.rightArmGroup.rotation.y = -0.1;
+          this.rightArmGroup.rotation.z = 0.35;
 
-        this.leftArmGroup.rotation.x = prepAngle * 0.6;
-        this.leftArmGroup.rotation.y = 0.15;
-        this.leftArmGroup.rotation.z = -0.2;
+          this.leftArmGroup.rotation.x = prepAngle * 0.6;
+          this.leftArmGroup.rotation.y = 0.15;
+          this.leftArmGroup.rotation.z = -0.2;
 
-        this.torsoGroup.rotation.x = castPower * 0.18; // leaning back
-        this.headGroup.rotation.x = -0.15;
+          this.torsoGroup.rotation.x = castPower * 0.18; // leaning back
+          this.headGroup.rotation.x = -0.15;
 
-        // Rod cocked backward over right shoulder
-        this.rodGroup.rotation.x = -0.2 - prepAngle * 0.6;
-        this.rodGroup.rotation.y = 0.25;
-        this.rodGroup.rotation.z = -0.15;
+          // Rod cocked backward over right shoulder
+          this.rodGroup.rotation.x = -0.2 - prepAngle * 0.6;
+          this.rodGroup.rotation.y = 0.25;
+          this.rodGroup.rotation.z = -0.15;
 
-        midBend = castPower * 0.15;
-        tipBend = castPower * 0.25;
+          midBend = castPower * 0.15;
+          tipBend = castPower * 0.25;
+        } else {
+          // Release & Forward Whip Follow-Through: rod whips forward toward water
+          this.rightArmGroup.rotation.x = -1.05;
+          this.rightArmGroup.rotation.y = -0.05;
+          this.rightArmGroup.rotation.z = 0.18;
+
+          this.leftArmGroup.rotation.x = -0.3;
+          this.leftArmGroup.rotation.y = 0.1;
+          this.leftArmGroup.rotation.z = -0.1;
+
+          this.torsoGroup.rotation.x = -0.08; // leaning forward on cast release
+          this.headGroup.rotation.x = 0.08;
+
+          this.rodGroup.rotation.x = -0.85; // rod points forward toward water
+          this.rodGroup.rotation.y = 0.05;
+          this.rodGroup.rotation.z = 0;
+
+          midBend = 0.08;
+          tipBend = 0.15;
+        }
       } else if (state === 'BITE') {
         // Sudden sharp bite jerk!
         const jolt = Math.sin(time * 30) * 0.08;
@@ -467,6 +489,15 @@ export class StylizedPlayerCharacter {
     // Update world matrices for accurate rod tip calculation
     this.group.updateMatrixWorld(true);
     this.rodTipMarker.getWorldPosition(this.rodTipPosition);
+  }
+
+  /**
+   * Authoritative world-space rod tip position.
+   * Updates matrices if necessary and returns the exact point of the rod eyelet.
+   */
+  public getRodTipWorldPosition(target: THREE.Vector3 = new THREE.Vector3()): THREE.Vector3 {
+    this.group.updateMatrixWorld(true);
+    return this.rodTipMarker.getWorldPosition(target);
   }
 
   /**
