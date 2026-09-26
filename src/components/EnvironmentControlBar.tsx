@@ -25,6 +25,7 @@ import {
   Pause,
   Play,
   Award,
+  HelpCircle,
 } from 'lucide-react';
 
 interface EnvironmentControlBarProps {
@@ -44,6 +45,7 @@ interface EnvironmentControlBarProps {
   onOpenShop?: () => void;
   onOpenCustomization?: () => void;
   onOpenCabin?: () => void;
+  onOpenGuide?: () => void;
 }
 
 export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
@@ -63,6 +65,7 @@ export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
   onOpenShop,
   onOpenCustomization,
   onOpenCabin,
+  onOpenGuide,
 }) => {
   const t = LOCALIZATION[language] || LOCALIZATION.en;
 
@@ -240,6 +243,19 @@ export const EnvironmentControlBar: React.FC<EnvironmentControlBarProps> = ({
             >
               <Palette className="w-3.5 h-3.5" />
               <span className="hidden lg:inline uppercase text-[10px]">GEAR</span>
+            </button>
+          )}
+
+          {/* Guide / Field Manual */}
+          {onOpenGuide && (
+            <button
+              id="btn-open-fishing-guide"
+              onClick={onOpenGuide}
+              title="Angler Field Guide"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-black text-white border border-white hover:bg-white hover:text-black transition-colors cursor-pointer shadow-[2px_2px_0px_0px_#ffffff]"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline uppercase text-[10px]">GUIDE</span>
             </button>
           )}
         </div>

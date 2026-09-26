@@ -42,6 +42,7 @@ import { TackleShopModal } from './components/TackleShopModal';
 import { GearCustomizationModal } from './components/GearCustomizationModal';
 import { PlayerCabinModal } from './components/PlayerCabinModal';
 import { DailyMissionsModal } from './components/DailyMissionsModal';
+import { FishingOnboardingOverlay } from './components/FishingOnboardingOverlay';
 import { RotateCw, AlertTriangle, Play, Sliders, BookOpen, Home } from 'lucide-react';
 
 export default function App() {
@@ -203,6 +204,15 @@ export default function App() {
   const [activeFish, setActiveFish] = useState<FishSpecies | null>(null);
   const [lastCatchRecord, setLastCatchRecord] = useState<CatchRecord | null>(null);
   const [isNewRecordCatch, setIsNewRecordCatch] = useState<boolean>(false);
+  // One-time Fishing Onboarding Overlay
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('fishing_days_onboarding_completed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [showOnboardingOverlay, setShowOnboardingOverlay] = useState<boolean>(false);
 
   // Authoritative Session Identification to prevent race conditions and orphaned callbacks
   const sessionIdCounterRef = useRef<number>(0);
@@ -403,6 +413,13 @@ export default function App() {
       window.removeEventListener('orientationchange', handleOrientation);
     };
   }, []);
+
+  // Trigger one-time onboarding on first arrival at dock or first fishing attempt
+  useEffect(() => {
+    if (canFish && !hasSeenOnboarding && (topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING')) {
+      setShowOnboardingOverlay(true);
+    }
+  }, [canFish, hasSeenOnboarding, topLevelGameState]);
 
   // --- ENGINE LOADING PROGRESS ARCHITECTURE ---
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -623,12 +640,29 @@ export default function App() {
   );
 
   // --- CAST CHARGING ---
+  const handleDismissOnboarding = useCallback(() => {
+    setShowOnboardingOverlay(false);
+    setHasSeenOnboarding(true);
+    try {
+      localStorage.setItem('fishing_days_onboarding_completed', 'true');
+    } catch {}
+  }, []);
+
+  const handleOpenGuide = useCallback(() => {
+    setShowOnboardingOverlay(true);
+  }, []);
+
   const handleStartCastCharge = useCallback(() => {
     if (fishingState !== 'IDLE' || !canFish || isPaused || isCastingRef.current) return;
     cleanupFishingSession('start cast charge');
     const session = ++sessionIdCounterRef.current;
     activeSessionIdRef.current = session;
     catchProcessedRef.current = false;
+
+    // Trigger one-time onboarding guide on first fishing session
+    if (!hasSeenOnboarding) {
+      setShowOnboardingOverlay(true);
+    }
 
     soundEngine.resume();
     setIsCastCharging(true);
@@ -653,7 +687,7 @@ export default function App() {
       }
       setCastPower(power);
     }, 40);
-  }, [fishingState, canFish, isPaused, cleanupFishingSession, transitionFishingState]);
+  }, [fishingState, canFish, isPaused, hasSeenOnboarding, cleanupFishingSession, transitionFishingState]);
 
   const handleCastLanded = useCallback(
     (landingDistance: number) => {
@@ -801,11 +835,30 @@ export default function App() {
       setIsNewRecordCatch(isNewBest);
 
       setLastCatchRecord(record);
+
+      // Mark onboarding completed upon first successful catch
+      if (!hasSeenOnboarding || showOnboardingOverlay) {
+        setHasSeenOnboarding(true);
+        setShowOnboardingOverlay(false);
+        try {
+          localStorage.setItem('fishing_days_onboarding_completed', 'true');
+        } catch {}
+      }
+
       transitionFishingState('CAUGHT', session, 'catch completed');
       setShowCatchModal(true);
       setTopLevelGameState('CATCH_RESULT');
     },
-    [activeFish, weather, timeOfDay, unlockedCatches, cleanupFishingSession, transitionFishingState]
+    [
+      activeFish,
+      weather,
+      timeOfDay,
+      unlockedCatches,
+      hasSeenOnboarding,
+      showOnboardingOverlay,
+      cleanupFishingSession,
+      transitionFishingState,
+    ]
   );
 
   // --- ACTIVE FIGHT GAME LOOP: Deterministic Line Tension Calculation ---
@@ -1216,6 +1269,7 @@ export default function App() {
           onOpenShop={() => setShowTackleShop(true)}
           onOpenCustomization={() => setShowCustomizationModal(true)}
           onOpenCabin={() => setShowCabinModal(true)}
+          onOpenGuide={handleOpenGuide}
         />
       )}
 
@@ -1259,6 +1313,20 @@ export default function App() {
           onResetToIdle={handleResetToIdle}
         />
       )}
+
+      {/* 6.5 ONE-TIME ONBOARDING OVERLAY FOR FIRST FISHING SESSION */}
+      {showOnboardingOverlay &&
+        (topLevelGameState === 'PLAYING' || topLevelGameState === 'FISHING') &&
+        !isAnyModalOpen && (
+          <FishingOnboardingOverlay
+            fishingState={fishingState}
+            castPower={castPower}
+            lineTension={lineTension}
+            language={language}
+            isOpen={showOnboardingOverlay}
+            onDismiss={handleDismissOnboarding}
+          />
+        )}
 
       {/* 7. PAUSE MENU (BLACK + WHITE MAXIMALISM) */}
       {topLevelGameState === 'PAUSED' && (
