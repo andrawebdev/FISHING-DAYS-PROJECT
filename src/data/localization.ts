@@ -57,6 +57,9 @@ export const LOCALIZATION: Record<SupportedLanguage, Record<string, string>> = {
     equippedLine: 'Line',
     equippedBait: 'Bait',
     coins: 'Coins',
+    shareToSocial: 'Share to Social',
+    copiedToClipboard: 'Copied to Clipboard!',
+    sharedSuccess: 'Shared Successfully!',
   },
   id: {
     appTitle: 'Fishing Days',
@@ -114,6 +117,9 @@ export const LOCALIZATION: Record<SupportedLanguage, Record<string, string>> = {
     equippedLine: 'Senar',
     equippedBait: 'Umpan',
     coins: 'Koin',
+    shareToSocial: 'Bagikan ke Sosial Media',
+    copiedToClipboard: 'Ringkasan Disalin ke Papan Klip!',
+    sharedSuccess: 'Berhasil Dibagikan!',
   },
   ja: {
     appTitle: 'Fishing Days',
@@ -171,6 +177,9 @@ export const LOCALIZATION: Record<SupportedLanguage, Record<string, string>> = {
     equippedLine: 'ライン',
     equippedBait: 'エサ',
     coins: 'コイン',
+    shareToSocial: '釣果をシェアする',
+    copiedToClipboard: 'クリップボードにコピーしました！',
+    sharedSuccess: 'シェア完了！',
   },
   es: {
     appTitle: 'Fishing Days',
@@ -228,5 +237,8 @@ export const LOCALIZATION: Record<SupportedLanguage, Record<string, string>> = {
     equippedLine: 'Línea',
     equippedBait: 'Cebo',
     coins: 'Monedas',
+    shareToSocial: 'Compartir en Redes',
+    copiedToClipboard: '¡Copiado al Portapapeles!',
+    sharedSuccess: '¡Compartido con éxito!',
   },
 };

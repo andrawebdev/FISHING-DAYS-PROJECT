@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { CatchRecord, FishSpecies, SupportedLanguage } from '../types';
 import { LOCALIZATION } from '../data/localization';
 import { ThreeFishViewer } from './ThreeFishViewer';
-import { Trophy, Check, ArrowRight, X } from 'lucide-react';
+import { Trophy, Check, ArrowRight, X, Share2 } from 'lucide-react';
 
 interface CatchModalProps {
   catchRecord: CatchRecord | null;
@@ -74,6 +74,7 @@ export const CatchModal: React.FC<CatchModalProps> = ({
   onKeep,
 }) => {
   const t = LOCALIZATION[language] || LOCALIZATION.en;
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'shared'>('idle');
 
   useEffect(() => {
     if (catchRecord) {
@@ -100,6 +101,48 @@ export const CatchModal: React.FC<CatchModalProps> = ({
   const style = MONO_RARITY_STYLES[catchRecord.rarity] || MONO_RARITY_STYLES.COMMON;
   const isDarkPanel = catchRecord.rarity === 'UNCOMMON' || catchRecord.rarity === 'EPIC' || catchRecord.rarity === 'MYTHIC';
 
+  const handleShare = async () => {
+    if (!species || !catchRecord) return;
+
+    const recordTag = isNewRecord ? '🏆 [NEW RECORD!] ' : '';
+    const formattedSummary = `🎣 ${recordTag}Fishing Days Catch: ${species.name}\n` +
+      `⭐ Rarity: ${catchRecord.rarity}\n` +
+      `⚖️ Weight: ${catchRecord.weight.toFixed(2)} KG\n` +
+      `📏 Length: ${catchRecord.length.toFixed(1)} CM\n` +
+      `💰 Value: $${catchRecord.value}\n` +
+      `Play Fishing Days 3D now!`;
+
+    const shareData = {
+      title: `Fishing Days - Caught a ${catchRecord.rarity} ${species.name}!`,
+      text: formattedSummary,
+      url: window.location.href,
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShareStatus('shared');
+        setTimeout(() => setShareStatus('idle'), 2500);
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    // Fallback to Clipboard API
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(`${formattedSummary}\n${window.location.href}`);
+        setShareStatus('copied');
+        setTimeout(() => setShareStatus('idle'), 2500);
+      } catch (clipboardErr) {
+        console.warn('Clipboard share copy failed:', clipboardErr);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-sm pointer-events-auto">
       <motion.div
@@ -121,16 +164,25 @@ export const CatchModal: React.FC<CatchModalProps> = ({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <span
               className={`px-2.5 py-0.5 text-[11px] uppercase ${style.badge} ${style.tagStyle}`}
             >
               {species.rarity}
             </span>
             <button
+              onClick={handleShare}
+              className="p-1 border border-current hover:bg-black hover:text-white transition-colors cursor-pointer"
+              title="Share to Social"
+              aria-label="Share Catch"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+            <button
               onClick={onKeep}
               className="p-1 border border-current hover:bg-black hover:text-white transition-colors cursor-pointer"
               title="Close and keep"
+              aria-label="Close modal"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -186,33 +238,67 @@ export const CatchModal: React.FC<CatchModalProps> = ({
           "{species.description}"
         </p>
 
-        {/* Action Buttons: Keep or Sell (High Contrast Chunky) */}
-        <div className="w-full grid grid-cols-2 gap-3 mt-1">
+        {/* Action Buttons: Share to Social & Keep/Sell */}
+        <div className="w-full flex flex-col gap-2.5 mt-1">
+          {/* Share to Social button */}
           <button
-            id="btn-keep-fish"
-            onClick={onKeep}
-            className={`py-3 px-4 font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition cursor-pointer flex items-center justify-center gap-2 ${
-              isDarkPanel
-                ? 'bg-black text-white border-white hover:bg-white hover:text-black'
-                : 'bg-white text-black border-black hover:bg-black hover:text-white'
+            id="btn-share-social"
+            type="button"
+            onClick={handleShare}
+            className={`w-full py-2.5 sm:py-3 px-4 font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition cursor-pointer flex items-center justify-center gap-2 select-none shadow-[3px_3px_0px_0px_#000000] active:translate-x-[1px] active:translate-y-[1px] ${
+              shareStatus === 'copied' || shareStatus === 'shared'
+                ? 'bg-emerald-600 text-white border-white'
+                : isDarkPanel
+                ? 'bg-white text-black border-white hover:bg-neutral-200'
+                : 'bg-black text-white border-black hover:bg-neutral-800'
             }`}
           >
-            <Check className="w-4 h-4" />
-            <span>KEEP IN WELL</span>
+            {shareStatus === 'copied' ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-200" />
+                <span>{t.copiedToClipboard || 'COPIED TO CLIPBOARD!'}</span>
+              </>
+            ) : shareStatus === 'shared' ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-200" />
+                <span>{t.sharedSuccess || 'SHARED!'}</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-4 h-4" />
+                <span>{t.shareToSocial || 'SHARE TO SOCIAL'}</span>
+              </>
+            )}
           </button>
 
-          <button
-            id="btn-sell-fish"
-            onClick={onSell}
-            className={`py-3 px-4 font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition cursor-pointer flex items-center justify-center gap-2 shadow-[3px_3px_0px_0px_#000000] ${
-              isDarkPanel
-                ? 'bg-white text-black border-white hover:bg-black hover:text-white shadow-[3px_3px_0px_0px_#ffffff]'
-                : 'bg-black text-white border-black hover:bg-white hover:text-black'
-            }`}
-          >
-            <span>SELL (+${catchRecord.value})</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          {/* Dual Action: Keep or Sell */}
+          <div className="w-full grid grid-cols-2 gap-2 sm:gap-3">
+            <button
+              id="btn-keep-fish"
+              onClick={onKeep}
+              className={`py-2.5 sm:py-3 px-3 sm:px-4 font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition cursor-pointer flex items-center justify-center gap-2 ${
+                isDarkPanel
+                  ? 'bg-black text-white border-white hover:bg-white hover:text-black'
+                  : 'bg-white text-black border-black hover:bg-black hover:text-white'
+              }`}
+            >
+              <Check className="w-4 h-4" />
+              <span>{t.keepFish || 'KEEP IN WELL'}</span>
+            </button>
+
+            <button
+              id="btn-sell-fish"
+              onClick={onSell}
+              className={`py-2.5 sm:py-3 px-3 sm:px-4 font-black text-xs sm:text-sm uppercase tracking-wider border-2 transition cursor-pointer flex items-center justify-center gap-1.5 sm:gap-2 shadow-[2px_2px_0px_0px_#000000] ${
+                isDarkPanel
+                  ? 'bg-[#222222] text-white border-white hover:bg-white hover:text-black shadow-[2px_2px_0px_0px_#ffffff]'
+                  : 'bg-black text-white border-black hover:bg-white hover:text-black'
+              }`}
+            >
+              <span>{t.sellFish || 'SELL'} (+${catchRecord.value})</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>
